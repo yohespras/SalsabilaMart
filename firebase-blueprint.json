@@ -1,0 +1,92 @@
+{
+  "entities": {
+    "product": {
+      "title": "Product",
+      "description": "Katalog produk dan stok barang Salsabila Mart",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "barcode": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "price": { "type": "number" },
+        "costPrice": { "type": "number" },
+        "stock": { "type": "number" },
+        "minStock": { "type": "number" },
+        "unit": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "barcode", "name", "price", "stock"]
+    },
+    "transaction": {
+      "title": "Transaction",
+      "description": "Riwayat transaksi penjualan kasir",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string" },
+        "cashierName": { "type": "string" },
+        "cashierRole": { "type": "string", "enum": ["admin", "kasir"] },
+        "subtotal": { "type": "number" },
+        "discount": { "type": "number" },
+        "total": { "type": "number" },
+        "paymentMethod": { "type": "string", "enum": ["TUNAI", "QRIS"] },
+        "amountPaid": { "type": "number" },
+        "change": { "type": "number" },
+        "qrisRef": { "type": "string" }
+      },
+      "required": ["id", "date", "cashierName", "total", "paymentMethod"]
+    },
+    "userProfile": {
+      "title": "UserProfile",
+      "description": "Profil pengguna dan staf kasir toko",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "kasir"] },
+        "phone": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "transactionsServed": { "type": "number" }
+      },
+      "required": ["id", "name", "email", "role"]
+    },
+    "storeProfile": {
+      "title": "StoreProfile",
+      "description": "Pengaturan identitas toko",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "tagline": { "type": "string" },
+        "address": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "operatingHours": { "type": "string" },
+        "qrisNmid": { "type": "string" },
+        "receiptHeader": { "type": "string" },
+        "receiptFooter": { "type": "string" },
+        "paperSize": { "type": "string", "enum": ["58mm", "80mm"] }
+      },
+      "required": ["name", "address", "phone"]
+    }
+  },
+  "firestore": {
+    "/products/{productId}": {
+      "schema": { "$ref": "#/entities/product" },
+      "description": "Daftar produk inventaris"
+    },
+    "/transactions/{transactionId}": {
+      "schema": { "$ref": "#/entities/transaction" },
+      "description": "Daftar nota transaksi penjualan"
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/userProfile" },
+      "description": "Akun admin dan staf kasir"
+    },
+    "/store/profile": {
+      "schema": { "$ref": "#/entities/storeProfile" },
+      "description": "Konfigurasi profil toko"
+    }
+  }
+}

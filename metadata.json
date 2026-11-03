@@ -1,0 +1,6 @@
+{
+  "name": "Salsabila Mart - Kasir Pintar POS & Inventaris",
+  "description": "Aplikasi web kasir modern untuk Salsabila Mart dengan integrasi Google Sheets, manajemen stok otomatis, scan barcode, struk thermal, dan laporan keuangan.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

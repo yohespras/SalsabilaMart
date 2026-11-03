@@ -1,0 +1,49 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Connection validation document
+    match /test/{docId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    // Products collection: allow read for POS & store catalog; allow write for signed-in staff
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    // Transactions collection: allow read and create for signed-in staff
+    match /transactions/{transactionId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn();
+    }
+
+    // User profiles: allow read for users; allow write for owner or signed-in users
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && (isOwner(userId) || request.auth.uid != null);
+    }
+
+    // Store settings
+    match /store/{docId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+  }
+}

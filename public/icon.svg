@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#059669" />
+      <stop offset="50%" stop-color="#0d9488" />
+      <stop offset="100%" stop-color="#047857" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#000" flood-opacity="0.3" />
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)" />
+  <g transform="translate(96, 96)" filter="url(#shadow)">
+    <!-- POS / Store Icon -->
+    <path d="M40 80 H280 V100 H40 Z" fill="#ffffff" opacity="0.9" />
+    <path d="M60 100 L260 100 L280 240 L40 240 Z" fill="#ffffff" opacity="0.95" />
+    <!-- Shop awning stripes -->
+    <path d="M60 100 L95 100 L85 240 L50 240 Z" fill="#f59e0b" />
+    <path d="M130 100 L165 100 L155 240 L120 240 Z" fill="#f59e0b" />
+    <path d="M200 100 L235 100 L225 240 L190 240 Z" fill="#f59e0b" />
+    <!-- Register Screen & Base -->
+    <rect x="80" y="240" width="160" height="70" rx="12" fill="#1e293b" />
+    <rect x="95" y="252" width="130" height="46" rx="6" fill="#10b981" />
+    <!-- Digital display line -->
+    <rect x="110" y="266" width="70" height="8" rx="4" fill="#ffffff" />
+    <rect x="110" y="280" width="40" height="6" rx="3" fill="#ffffff" opacity="0.8" />
+    <!-- Cash drawer base -->
+    <rect x="60" y="310" width="200" height="30" rx="8" fill="#0f172a" />
+    <circle cx="160" cy="325" r="5" fill="#f59e0b" />
+  </g>
+</svg>

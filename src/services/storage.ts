@@ -7,290 +7,74 @@ export const DEFAULT_STORE_PROFILE: StoreProfile = {
   phone: '0812-3456-7890',
   email: 'salsabilamart684@gmail.com',
   operatingHours: 'Setiap Hari 07.00 - 22.00 WIB',
-  qrisNmid: 'ID10200304050607',
+  qrisNmid: '',
   receiptHeader: 'Terima kasih telah berbelanja di Salsabila Mart',
-  receiptFooter: 'Barang yang sudah dibeli tidak dapat ditukar kecuali ada cacat pabrik. Simpan struk ini sebagai bukti transaksi.',
+  receiptFooter:
+    'Barang yang sudah dibeli tidak dapat ditukar kecuali ada cacat pabrik. Simpan struk ini sebagai bukti transaksi.',
   paperSize: '58mm',
 };
 
-export const INITIAL_PRODUCTS: Product[] = [
-  {
-    id: 'p-1',
-    barcode: '8999999195041',
-    name: 'Beras Premium Ramos 5kg',
-    category: 'Sembako',
-    price: 74000,
-    costPrice: 66000,
-    stock: 15,
-    minStock: 5,
-    unit: 'sak',
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'p-2',
-    barcode: '8992388123456',
-    name: 'Minyak Goreng Sania 2L',
-    category: 'Sembako',
-    price: 36000,
-    costPrice: 32500,
-    stock: 4, // Low stock alert! (<= minStock 6)
-    minStock: 6,
-    unit: 'pouch',
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'p-3',
-    barcode: '8998866200234',
-    name: 'Gula Pasir Gulaku 1kg',
-    category: 'Sembako',
-    price: 18500,
-    costPrice: 16500,
-    stock: 20,
-    minStock: 5,
-    unit: 'bks',
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'p-4',
-    barcode: '8992775210101',
-    name: 'Indomie Goreng Spesial 85g',
-    category: 'Makanan Instan',
-    price: 3500,
-    costPrice: 3000,
-    stock: 72,
-    minStock: 20,
-    unit: 'pcs',
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'p-5',
-    barcode: '8992775210102',
-    name: 'Indomie Kuah Ayam Bawang 75g',
-    category: 'Makanan Instan',
-    price: 3500,
-    costPrice: 3000,
-    stock: 7, // Low stock alert!
-    minStock: 15,
-    unit: 'pcs',
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'p-6',
-    barcode: '8991389222333',
-    name: 'Telur Ayam Negeri 1kg',
-    category: 'Sembako',
-    price: 29000,
-    costPrice: 26000,
-    stock: 14,
-    minStock: 5,
-    unit: 'kg',
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'p-7',
-    barcode: '8996001301015',
-    name: 'Teh Botol Sosro 450ml',
-    category: 'Minuman',
-    price: 6500,
-    costPrice: 5200,
-    stock: 3, // Low stock alert!
-    minStock: 10,
-    unit: 'btl',
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'p-8',
-    barcode: '8996001410007',
-    name: 'Aqua Air Mineral 600ml',
-    category: 'Minuman',
-    price: 4000,
-    costPrice: 3000,
-    stock: 36,
-    minStock: 12,
-    unit: 'btl',
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'p-9',
-    barcode: '8992753210045',
-    name: 'Kopi Kapal Api Spesial Mix 10s',
-    category: 'Minuman',
-    price: 15000,
-    costPrice: 13200,
-    stock: 24,
-    minStock: 6,
-    unit: 'renceng',
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'p-10',
-    barcode: '8998899120011',
-    name: 'Susu UHT Ultra Milk Cokelat 250ml',
-    category: 'Minuman',
-    price: 7500,
-    costPrice: 6200,
-    stock: 18,
-    minStock: 8,
-    unit: 'kotak',
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'p-11',
-    barcode: '8999999551101',
-    name: 'Sabun Mandi Lifebuoy Total 10 110g',
-    category: 'Perlengkapan Mandi',
-    price: 5500,
-    costPrice: 4300,
-    stock: 22,
-    minStock: 8,
-    unit: 'pcs',
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'p-12',
-    barcode: '8992695123456',
-    name: 'Deterjen Rinso Molto Bubuk 770g',
-    category: 'Kebutuhan Rumah',
-    price: 24000,
-    costPrice: 20500,
-    stock: 5, // Low stock alert!
-    minStock: 8,
-    unit: 'bks',
-    updatedAt: new Date().toISOString(),
-  },
-];
+// Produksi: Seluruh data produk dan transaksi dimulai bersih dari 0 (tanpa data contoh/demo)
+export const INITIAL_PRODUCTS: Product[] = [];
 
-export const INITIAL_TRANSACTIONS: Transaction[] = [
-  {
-    id: 'TRX-20261012-001',
-    date: new Date(Date.now() - 3600000 * 3).toISOString(),
-    cashierName: 'Kasir Salsabila Mart',
-    cashierRole: 'kasir',
-    items: [
-      {
-        productId: 'p-1',
-        barcode: '8999999195041',
-        name: 'Beras Premium Ramos 5kg',
-        price: 74000,
-        costPrice: 66000,
-        quantity: 1,
-        subtotal: 74000,
-      },
-      {
-        productId: 'p-4',
-        barcode: '8992775210101',
-        name: 'Indomie Goreng Spesial 85g',
-        price: 3500,
-        costPrice: 3000,
-        quantity: 5,
-        subtotal: 17500,
-      },
-    ],
-    subtotal: 91500,
-    discount: 0,
-    total: 91500,
-    paymentMethod: 'TUNAI',
-    amountPaid: 100000,
-    change: 8500,
-  },
-  {
-    id: 'TRX-20261012-002',
-    date: new Date(Date.now() - 3600000 * 1.5).toISOString(),
-    cashierName: 'Salsabila (Admin)',
-    cashierRole: 'admin',
-    items: [
-      {
-        productId: 'p-2',
-        barcode: '8992388123456',
-        name: 'Minyak Goreng Sania 2L',
-        price: 36000,
-        costPrice: 32500,
-        quantity: 2,
-        subtotal: 72000,
-      },
-      {
-        productId: 'p-3',
-        barcode: '8998866200234',
-        name: 'Gula Pasir Gulaku 1kg',
-        price: 18500,
-        costPrice: 16500,
-        quantity: 1,
-        subtotal: 18500,
-      },
-      {
-        productId: 'p-8',
-        barcode: '8996001410007',
-        name: 'Aqua Air Mineral 600ml',
-        price: 4000,
-        costPrice: 3000,
-        quantity: 2,
-        subtotal: 8000,
-      },
-    ],
-    subtotal: 98500,
-    discount: 3500,
-    total: 95000,
-    paymentMethod: 'QRIS',
-    amountPaid: 95000,
-    change: 0,
-    qrisRef: 'QRIS-ID-88491209',
-  },
-];
+export const INITIAL_TRANSACTIONS: Transaction[] = [];
 
 export const INITIAL_USERS: UserProfile[] = [
   {
-    id: 'user-admin-1',
+    id: 'admin-salsabila',
     name: 'Salsabila (Pemilik Toko)',
     email: 'salsabilamart684@gmail.com',
     role: 'admin',
     pin: '123456',
-    phone: '0812-3456-7890',
+    phone: '',
     isActive: true,
-    transactionsServed: 148,
+    transactionsServed: 0,
     isDemo: false,
-  },
-  {
-    id: 'user-kasir-1',
-    name: 'Budi Santoso',
-    email: 'kasir.budi@gmail.com',
-    role: 'kasir',
-    pin: '123456',
-    phone: '0857-1122-3344',
-    isActive: true,
-    transactionsServed: 92,
-    isDemo: true,
-  },
-  {
-    id: 'user-kasir-2',
-    name: 'Dewi Lestari',
-    email: 'kasir.dewi@gmail.com',
-    role: 'kasir',
-    pin: '112233',
-    phone: '0878-5566-7788',
-    isActive: true,
-    transactionsServed: 57,
-    isDemo: true,
   },
 ];
 
+// Gunakan kunci penyimpanan produksi v2 dan bersihkan sisa kunci demo v1 lama
+const LEGACY_DEMO_KEYS = [
+  'salsabilamart_products_v1',
+  'salsabilamart_transactions_v1',
+  'salsabilamart_users_v1',
+];
+
 const STORAGE_KEYS = {
-  PRODUCTS: 'salsabilamart_products_v1',
-  TRANSACTIONS: 'salsabilamart_transactions_v1',
-  STORE_PROFILE: 'salsabilamart_store_profile_v1',
-  CURRENT_USER: 'salsabilamart_current_user_v1',
-  GOOGLE_SHEET_CONFIG: 'salsabilamart_gsheet_config_v1',
-  USERS: 'salsabilamart_users_v1',
+  PRODUCTS: 'salsabilamart_products_v2_prod',
+  TRANSACTIONS: 'salsabilamart_transactions_v2_prod',
+  STORE_PROFILE: 'salsabilamart_store_profile_v2_prod',
+  CURRENT_USER: 'salsabilamart_current_user_v2_prod',
+  GOOGLE_SHEET_CONFIG: 'salsabilamart_gsheet_config_v2_prod',
+  USERS: 'salsabilamart_users_v2_prod',
   DARK_MODE: 'salsabilamart_dark_mode_v1',
 };
 
+const purgeLegacyDemoStorageOnce = () => {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    for (const key of LEGACY_DEMO_KEYS) {
+      if (localStorage.getItem(key) !== null) {
+        localStorage.removeItem(key);
+      }
+    }
+  } catch {
+    // ignore storage errors
+  }
+};
+
+purgeLegacyDemoStorageOnce();
+
 export const loadStoredProducts = (): Product[] => {
   try {
+    purgeLegacyDemoStorageOnce();
     const raw = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
     if (!raw) {
       saveStoredProducts(INITIAL_PRODUCTS);
       return INITIAL_PRODUCTS;
     }
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : INITIAL_PRODUCTS;
   } catch (err) {
     console.error('Error loading products from localStorage:', err);
     return INITIAL_PRODUCTS;
@@ -307,6 +91,7 @@ export const saveStoredProducts = (products: Product[]) => {
 
 export const loadStoredTransactions = (): Transaction[] => {
   try {
+    purgeLegacyDemoStorageOnce();
     const raw = localStorage.getItem(STORAGE_KEYS.TRANSACTIONS);
     if (raw === null) {
       saveStoredTransactions(INITIAL_TRANSACTIONS);
@@ -328,14 +113,18 @@ export const saveStoredTransactions = (transactions: Transaction[]) => {
   }
 };
 
-export const clearStoredTransactions = () => {
-  saveStoredTransactions([]);
-};
-
 export const loadStoredProfile = (): StoreProfile => {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.STORE_PROFILE);
     if (!raw) {
+      // Migrasikan profil toko v1 jika sudah pernah diubah pemilik
+      const legacyProfile = localStorage.getItem('salsabilamart_store_profile_v1');
+      if (legacyProfile) {
+        const merged = { ...DEFAULT_STORE_PROFILE, ...JSON.parse(legacyProfile) };
+        saveStoredProfile(merged);
+        localStorage.removeItem('salsabilamart_store_profile_v1');
+        return merged;
+      }
       saveStoredProfile(DEFAULT_STORE_PROFILE);
       return DEFAULT_STORE_PROFILE;
     }
@@ -356,12 +145,14 @@ export const saveStoredProfile = (profile: StoreProfile) => {
 
 export const loadStoredUsers = (): UserProfile[] => {
   try {
+    purgeLegacyDemoStorageOnce();
     const raw = localStorage.getItem(STORAGE_KEYS.USERS);
     if (!raw) {
       saveStoredUsers(INITIAL_USERS);
       return INITIAL_USERS;
     }
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_USERS;
   } catch (err) {
     console.error('Error loading users:', err);
     return INITIAL_USERS;
@@ -380,6 +171,13 @@ export const loadStoredSheetsConfig = (): any => {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.GOOGLE_SHEET_CONFIG);
     if (!raw) {
+      const legacyCfg = localStorage.getItem('salsabilamart_gsheet_config_v1');
+      if (legacyCfg) {
+        const parsedLegacy = JSON.parse(legacyCfg);
+        saveStoredSheetsConfig(parsedLegacy);
+        localStorage.removeItem('salsabilamart_gsheet_config_v1');
+        return parsedLegacy;
+      }
       return {
         spreadsheetId: '',
         spreadsheetName: '',
@@ -466,7 +264,7 @@ export interface LocalDataBackup {
 
 export const exportAllLocalDataBackup = (): LocalDataBackup => {
   return {
-    version: '1.0',
+    version: '2.0',
     exportedAt: new Date().toISOString(),
     storeProfile: loadStoredProfile(),
     products: loadStoredProducts(),
@@ -537,7 +335,6 @@ export const downloadLocalDataBackupFile = () => {
 
 /**
  * Unduh Script Runner Lokal (Windows .BAT)
- * Memungkinkan kasir dibuka di laptop/PC toko tanpa perlu hosting!
  */
 export const downloadWindowsBatchRunner = () => {
   const batchScript = `@echo off
@@ -550,7 +347,6 @@ echo                   MODE LOKAL (TANPA HOSTING)
 echo ================================================================
 echo.
 echo Aplikasi ini berjalan secara lokal di laptop / komputer toko Anda.
-echo Tidak memerlukan hosting cloud, Vercel, Firebase, atau kuota internet!
 echo.
 echo Memeriksa lingkungan perangkat...
 where node >nul 2>nul
@@ -558,8 +354,6 @@ if %ERRORLEVEL% EQU 0 (
     echo [OK] Node.js terdeteksi di komputer Anda.
     echo Menjalankan server lokal Vite Preview pada port 3000...
     echo Browser akan otomatis terbuka ke: http://localhost:3000
-    echo.
-    echo Tekan Ctrl+C jika ingin mematikan kasir.
     echo.
     start "" http://localhost:3000
     call npm run preview
@@ -625,4 +419,3 @@ npm run preview
     return false;
   }
 };
-

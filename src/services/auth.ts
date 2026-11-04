@@ -14,47 +14,25 @@ import firebaseConfig from '../../firebase-applet-config.json';
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 export const auth = getAuth(app);
 // CRITICAL: Initialize Firestore with the exact database ID provisioned for this project
-export const db = getFirestore(app, (firebaseConfig as any).firestoreDatabaseId);
+export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 
 const provider = new GoogleAuthProvider();
 provider.addScope('https://www.googleapis.com/auth/spreadsheets');
 provider.addScope('https://www.googleapis.com/auth/drive.file');
 
-const SESSION_TOKEN_KEY = 'salsabilamart_google_oauth_token_v1';
-const SESSION_EXPIRY_KEY = 'salsabilamart_google_oauth_expiry_v1';
-
-const loadSessionToken = (): string | null => {
-  try {
-    const token = sessionStorage.getItem(SESSION_TOKEN_KEY);
-    const expiry = Number(sessionStorage.getItem(SESSION_EXPIRY_KEY) || '0');
-    if (token && expiry > Date.now()) {
-      return token;
-    }
-    sessionStorage.removeItem(SESSION_TOKEN_KEY);
-    sessionStorage.removeItem(SESSION_EXPIRY_KEY);
-    return null;
-  } catch {
-    return null;
-  }
-};
-
-const saveSessionToken = (token: string | null) => {
-  try {
-    if (token) {
-      sessionStorage.setItem(SESSION_TOKEN_KEY, token);
-      // Google OAuth access tokens last ~3600s; cache for 50 minutes
-      sessionStorage.setItem(SESSION_EXPIRY_KEY, String(Date.now() + 50 * 60 * 1000));
-    } else {
-      sessionStorage.removeItem(SESSION_TOKEN_KEY);
-      sessionStorage.removeItem(SESSION_EXPIRY_KEY);
-    }
-  } catch {
-    // ignore storage errors
-  }
-};
-
 let isSigningIn = false;
-let cachedAccessToken: string | null = loadSessionToken();
+// Strictly in-memory OAuth access token cache for Google Workspace APIs
+let cachedAccessToken: string | null = null;
+let cachedTokenExpiry = 0;
+
+const getValidMemoryToken = (): string | null => {
+  if (cachedAccessToken && cachedTokenExpiry > Date.now()) {
+    return cachedAccessToken;
+  }
+  cachedAccessToken = null;
+  cachedTokenExpiry = 0;
+  return null;
+};
 
 // Error translation helper for Firebase Auth
 export function formatFirebaseAuthError(error: any): string {
@@ -67,13 +45,13 @@ export function formatFirebaseAuthError(error: any): string {
     return 'Jendela masuk Google ditutup sebelum selesai. Silakan coba lagi.';
   }
   if (code === 'auth/unauthorized-domain') {
-    return `Domain ini belum terdaftar di Firebase Authorized Domains. Anda tetap dapat masuk menggunakan PIN / Akun Kasir secara offline atau memakai mode Webhook.`;
+    return 'Domain ini belum terdaftar di Firebase Authorized Domains. Daftarkan domain di Firebase Console agar sinkronisasi lintas perangkat aktif.';
   }
   if (code === 'auth/cancelled-popup-request') {
     return 'Permintaan popup sebelumnya dibatalkan. Silakan klik sekali lagi.';
   }
   if (code === 'auth/network-request-failed') {
-    return 'Koneksi jaringan terputus. Menggunakan mode offline.';
+    return 'Koneksi jaringan terputus. Menggunakan penyimpanan lokal sementara.';
   }
   return error.message || 'Gagal masuk dengan Google.';
 }
@@ -87,18 +65,47 @@ export enum OperationType {
   WRITE = 'write',
 }
 
-export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo = {
+export interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  };
+}
+
+export function handleFirestoreError(
+  error: unknown,
+  operationType: OperationType,
+  path: string | null
+): never {
+  const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
       userId: auth.currentUser?.uid,
       email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo:
+        auth.currentUser?.providerData?.map((p) => ({
+          providerId: p.providerId,
+          email: p.email,
+        })) || [],
     },
     operationType,
     path,
   };
-  console.warn('Firestore Operation Notification:', JSON.stringify(errInfo));
-  return errInfo;
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
 }
 
 // Test Firestore connection on startup
@@ -107,28 +114,23 @@ export async function testFirestoreConnection() {
     await getDocFromServer(doc(db, 'test', 'connection'));
   } catch (error) {
     if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.warn('Firebase client offline, local cache is active.');
+      console.error('Please check your Firebase configuration.');
     }
   }
 }
 
 export const initAuth = (
-  onAuthSuccess?: (user: User, token: string) => void,
+  onAuthSuccess?: (user: User, token: string | null) => void,
   onAuthFailure?: () => void
 ) => {
   return onAuthStateChanged(auth, async (user: User | null) => {
     if (user) {
-      if (!cachedAccessToken) {
-        cachedAccessToken = loadSessionToken();
+      if (onAuthSuccess) {
+        onAuthSuccess(user, getValidMemoryToken());
       }
-      if (cachedAccessToken) {
-        if (onAuthSuccess) onAuthSuccess(user, cachedAccessToken);
-      } else if (!isSigningIn) {
-        if (onAuthFailure) onAuthFailure();
-      }
-    } else {
+    } else if (!isSigningIn) {
       cachedAccessToken = null;
-      saveSessionToken(null);
+      cachedTokenExpiry = 0;
       if (onAuthFailure) onAuthFailure();
     }
   });
@@ -143,7 +145,7 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
       throw new Error('Gagal mendapatkan token akses Google dari Firebase');
     }
     cachedAccessToken = credential.accessToken;
-    saveSessionToken(cachedAccessToken);
+    cachedTokenExpiry = Date.now() + 50 * 60 * 1000;
     return { user: result.user, accessToken: cachedAccessToken };
   } catch (error: any) {
     console.error('Sign in error:', error);
@@ -154,10 +156,7 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
 };
 
 export const getAccessToken = async (): Promise<string | null> => {
-  if (!cachedAccessToken) {
-    cachedAccessToken = loadSessionToken();
-  }
-  return cachedAccessToken;
+  return getValidMemoryToken();
 };
 
 export const ensureAccessToken = async (interactive = false): Promise<string | null> => {
@@ -170,16 +169,16 @@ export const ensureAccessToken = async (interactive = false): Promise<string | n
 
 export const clearCachedAccessToken = () => {
   cachedAccessToken = null;
-  saveSessionToken(null);
+  cachedTokenExpiry = 0;
 };
 
 export const setCachedAccessToken = (token: string | null) => {
   cachedAccessToken = token;
-  saveSessionToken(token);
+  cachedTokenExpiry = token ? Date.now() + 50 * 60 * 1000 : 0;
 };
 
 export const logoutGoogle = async () => {
   await signOut(auth);
   cachedAccessToken = null;
-  saveSessionToken(null);
+  cachedTokenExpiry = 0;
 };

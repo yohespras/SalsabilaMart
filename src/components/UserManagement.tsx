@@ -10,7 +10,8 @@ import {
   Search,
   Eye,
   EyeOff,
-  Sparkles,
+  Cloud,
+  AlertTriangle,
 } from 'lucide-react';
 import { UserProfile, UserRole } from '../types';
 import { ChangePinModal } from './ChangePinModal';
@@ -21,7 +22,7 @@ interface UserManagementProps {
   onAddUser: (user: Omit<UserProfile, 'id'>) => void;
   onUpdateUser: (user: UserProfile) => void;
   onDeleteUser: (userId: string) => void;
-  onClearDemoUsers?: () => void;
+  isCloudSynced?: boolean;
   isDark: boolean;
 }
 
@@ -31,13 +32,15 @@ export const UserManagement: React.FC<UserManagementProps> = ({
   onAddUser,
   onUpdateUser,
   onDeleteUser,
-  onClearDemoUsers,
+  isCloudSynced = false,
   isDark,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
   const [pinModalUser, setPinModalUser] = useState<UserProfile | null>(null);
+  const [confirmDeleteUser, setConfirmDeleteUser] = useState<UserProfile | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -48,8 +51,6 @@ export const UserManagement: React.FC<UserManagementProps> = ({
   });
   const [showFormPin, setShowFormPin] = useState(false);
 
-  const hasDemoUsers = users.some((u) => u.isDemo);
-
   const filteredUsers = users.filter(
     (u) =>
       u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -59,6 +60,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
 
   const handleOpenAdd = () => {
     setEditingUser(null);
+    setFormError(null);
     setFormData({
       name: '',
       email: '',
@@ -73,6 +75,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
 
   const handleOpenEdit = (user: UserProfile) => {
     setEditingUser(user);
+    setFormError(null);
     setFormData({
       name: user.name,
       email: user.email,
@@ -87,23 +90,30 @@ export const UserManagement: React.FC<UserManagementProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError(null);
     if (!formData.name.trim() || !formData.email.trim()) {
-      alert('Nama dan Email/Username wajib diisi!');
+      setFormError('Nama lengkap dan Email Google / Username wajib diisi!');
       return;
     }
     if (!editingUser && formData.pin.length < 4) {
-      alert('PIN / Password pengguna baru minimal 4 digit!');
+      setFormError('PIN / Password pengguna baru minimal 4 karakter!');
       return;
     }
     if (editingUser) {
       onUpdateUser({
         ...editingUser,
         ...formData,
+        name: formData.name.trim(),
+        email: formData.email.trim(),
+        pin: formData.pin.trim() || editingUser.pin,
         isDemo: false,
       });
     } else {
       onAddUser({
         ...formData,
+        name: formData.name.trim(),
+        email: formData.email.trim(),
+        pin: formData.pin.trim(),
         transactionsServed: 0,
         isDemo: false,
       });
@@ -137,56 +147,44 @@ export const UserManagement: React.FC<UserManagementProps> = ({
           </div>
           <div>
             <h1 className={`text-xl sm:text-2xl font-black tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
-              Manajemen Pengguna & Keamanan Akun
+              Manajemen Pengguna & Akses Multi-Perangkat
             </h1>
             <p className="text-xs text-slate-400 mt-0.5">
-              Kelola akun administrator dan kasir, atur PIN / Password real, dan amankan akses toko Anda.
+              Daftarkan email Google staf kasir atau admin agar saat login di HP/perangkat lain otomatis tersinkron ke toko ini.
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          {hasDemoUsers && onClearDemoUsers && (
-            <button
-              onClick={onClearDemoUsers}
-              className="px-3.5 py-2.5 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-400 rounded-2xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
-              title="Hapus akun bawaan demo"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>Bersihkan Akun Demo</span>
-            </button>
-          )}
-          <button
-            onClick={handleOpenAdd}
-            className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white rounded-2xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-emerald-600/30 transition-all cursor-pointer w-fit"
-          >
-            <UserPlus className="w-4 h-4" />
-            <span>Tambah Pengguna Baru</span>
-          </button>
-        </div>
+        <button
+          onClick={handleOpenAdd}
+          className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white rounded-2xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-emerald-600/30 transition-all cursor-pointer w-fit"
+        >
+          <UserPlus className="w-4 h-4" />
+          <span>Tambah Staf / Kasir</span>
+        </button>
       </div>
 
-      {/* Demo Notice Banner if demo users present */}
-      {hasDemoUsers && (
-        <div className="p-4 rounded-3xl border border-amber-500/30 bg-amber-500/10 text-amber-300 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <Sparkles className="w-4 h-4 shrink-0 text-amber-400" />
-            <div>
-              <p className="font-bold">Beberapa akun masih berupa Akun Demo bawaan.</p>
-              <p className="text-[11px] text-amber-200/80">
-                Ubah PIN akun atau buat akun staf asli Anda untuk menggantikan akun demo.
-              </p>
-            </div>
-          </div>
-          {onClearDemoUsers && (
-            <button
-              onClick={onClearDemoUsers}
-              className="px-3 py-1.5 bg-amber-500 text-slate-950 hover:bg-amber-400 rounded-xl font-bold text-[11px] shrink-0 cursor-pointer shadow-xs"
-            >
-              Hapus Akun Demo Sekarang
-            </button>
-          )}
+      {/* Multi-device Sync Tip Banner */}
+      <div
+        className={`p-4 rounded-3xl border text-xs flex items-start gap-3 ${
+          isCloudSynced
+            ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
+            : isDark
+            ? 'border-slate-800 bg-slate-900/80 text-slate-300'
+            : 'border-slate-200 bg-white text-slate-700'
+        }`}
+      >
+        <Cloud className="w-4 h-4 shrink-0 mt-0.5 text-emerald-500" />
+        <div className="space-y-0.5">
+          <p className="font-bold">
+            {isCloudSynced
+              ? 'Sinkronisasi Akun Lintas Perangkat Aktif'
+              : 'Tips Login di Perangkat Lain (HP / Tablet / PC Kasir):'}
+          </p>
+          <p className="text-[11px] opacity-85 leading-relaxed">
+            Gunakan akun Google yang sama (<strong>salsabilamart684@gmail.com</strong>) di perangkat lain, atau tambahkan alamat Gmail kasir Anda di bawah ini agar kasir dapat login dengan Google di HP-nya dan langsung mengakses data barang &amp; stok yang sama secara real-time.
+          </p>
         </div>
-      )}
+      </div>
 
       {/* Search Bar */}
       <div
@@ -211,7 +209,9 @@ export const UserManagement: React.FC<UserManagementProps> = ({
       {/* User Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {filteredUsers.map((u) => {
-          const isMe = currentUser.id === u.id;
+          const isMe =
+            currentUser.id === u.id ||
+            currentUser.email.toLowerCase() === u.email.toLowerCase();
           const isAdminRole = u.role === 'admin';
           return (
             <div
@@ -233,22 +233,13 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                       {u.name.slice(0, 2).toUpperCase()}
                     </div>
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <h3 className={`font-black text-sm ${isDark ? 'text-white' : 'text-slate-900'}`}>
                           {u.name}
                         </h3>
                         {isMe && (
                           <span className="text-[10px] font-bold bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-0.2 rounded-full">
                             Anda
-                          </span>
-                        )}
-                        {u.isDemo ? (
-                          <span className="text-[9px] font-bold bg-amber-500/20 text-amber-400 px-1.5 py-0.2 rounded-full">
-                            Demo
-                          </span>
-                        ) : (
-                          <span className="text-[9px] font-bold bg-emerald-500/20 text-emerald-400 px-1.5 py-0.2 rounded-full">
-                            Real
                           </span>
                         )}
                       </div>
@@ -323,11 +314,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                   </button>
                   {!isMe && (
                     <button
-                      onClick={() => {
-                        if (confirm(`Yakin ingin menghapus pengguna "${u.name}"?`)) {
-                          onDeleteUser(u.id);
-                        }
-                      }}
+                      onClick={() => setConfirmDeleteUser(u)}
                       className="p-1.5 rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer"
                       title="Hapus pengguna"
                     >
@@ -351,7 +338,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
           >
             <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
               <h3 className="font-black text-base">
-                {editingUser ? 'Edit Pengguna' : 'Tambah Pengguna Baru'}
+                {editingUser ? 'Edit Pengguna' : 'Tambah Staf / Kasir Baru'}
               </h3>
               <button
                 onClick={() => setIsModalOpen(false)}
@@ -361,36 +348,49 @@ export const UserManagement: React.FC<UserManagementProps> = ({
               </button>
             </div>
             <form onSubmit={handleSubmit} className="space-y-4 pt-4">
+              {formError && (
+                <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-500 text-xs font-bold">
+                  {formError}
+                </div>
+              )}
               <div>
                 <label className="text-xs font-bold block mb-1">Nama Lengkap *</label>
                 <input
                   type="text"
                   required
+                  maxLength={120}
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="Contoh: Rian Sanjaya"
+                  placeholder="Contoh: Rina Kasir"
                   className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-hidden ${
                     isDark ? 'bg-slate-850 border-slate-700 text-white' : 'bg-white border-slate-300'
                   }`}
                 />
               </div>
               <div>
-                <label className="text-xs font-bold block mb-1">Email / Username *</label>
+                <label className="text-xs font-bold block mb-1">
+                  Alamat Email Google (untuk Login Multi-Perangkat) *
+                </label>
                 <input
                   type="text"
                   required
+                  maxLength={128}
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  placeholder="rian@toko.com"
+                  placeholder="contohkasir@gmail.com"
                   className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-hidden ${
                     isDark ? 'bg-slate-850 border-slate-700 text-white' : 'bg-white border-slate-300'
                   }`}
                 />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Masukkan alamat Gmail staf agar ia dapat login Google dari perangkat lain &amp; tersinkron otomatis.
+                </p>
               </div>
               <div>
                 <label className="text-xs font-bold block mb-1">Nomor Telepon / WhatsApp</label>
                 <input
                   type="tel"
+                  maxLength={40}
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                   placeholder="0812xxxxxxxx"
@@ -421,6 +421,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                     <input
                       type={showFormPin ? 'text' : 'password'}
                       required={!editingUser}
+                      maxLength={64}
                       value={formData.pin}
                       onChange={(e) => setFormData({ ...formData, pin: e.target.value })}
                       placeholder={editingUser ? 'Biarkan bila tetap' : 'Min. 4 karakter'}
@@ -466,6 +467,48 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm Delete User Modal */}
+      {confirmDeleteUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div
+            className={`rounded-3xl shadow-2xl max-w-sm w-full p-6 border space-y-4 ${
+              isDark ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-900'
+            }`}
+          >
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 rounded-2xl bg-rose-500/15 text-rose-500 shrink-0">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div className="text-xs space-y-1">
+                <h4 className="font-black text-sm">Hapus Akun Pengguna?</h4>
+                <p className="text-slate-400 leading-relaxed">
+                  Pengguna <strong>{confirmDeleteUser.name}</strong> ({confirmDeleteUser.email}) akan dihapus dari daftar akses toko.
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteUser(null)}
+                className="px-4 py-2 rounded-xl text-xs font-bold border border-slate-300 dark:border-slate-700 cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onDeleteUser(confirmDeleteUser.id);
+                  setConfirmDeleteUser(null);
+                }}
+                className="px-4 py-2 rounded-xl text-xs font-black bg-rose-600 hover:bg-rose-500 text-white cursor-pointer"
+              >
+                Ya, Hapus
+              </button>
+            </div>
           </div>
         </div>
       )}

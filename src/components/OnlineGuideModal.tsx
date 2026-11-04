@@ -138,10 +138,10 @@ export const OnlineGuideModal: React.FC<OnlineGuideModalProps> = ({
       if (content) {
         const result = importAllLocalDataBackup(content);
         if (result.success) {
-          alert(`${result.message} Halaman akan disegarkan untuk memuat data.`);
-          window.location.reload();
+          setBackupNotice(`${result.message} Memuat ulang halaman...`);
+          setTimeout(() => window.location.reload(), 1200);
         } else {
-          alert(result.message);
+          setBackupNotice(result.message);
         }
       }
     };

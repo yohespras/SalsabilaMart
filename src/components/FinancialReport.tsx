@@ -7,7 +7,6 @@ import {
   Search,
   QrCode,
   RefreshCw,
-  Trash2,
 } from 'lucide-react';
 import { StoreProfile, Transaction, UserRole } from '../types';
 import { formatRupiah, getLocalDateString } from '../services/storage';
@@ -98,24 +97,14 @@ export const FinancialReport: React.FC<FinancialReportProps> = ({
             />
           </div>
           {userRole === 'admin' && onOpenSyncModal && (
-            <>
-              <button
-                onClick={() => onOpenSyncModal('hub')}
-                className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl text-xs font-bold border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 transition-all cursor-pointer"
-                title="Sinkronkan Laporan & Transaksi dengan Google Sheets"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                <span>Sinkron Sheets</span>
-              </button>
-              <button
-                onClick={() => onOpenSyncModal('confirm-zero')}
-                className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl text-xs font-bold border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 transition-all cursor-pointer"
-                title="Kosongkan / 0-kan seluruh transaksi"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>0-kan Transaksi</span>
-              </button>
-            </>
+            <button
+              onClick={() => onOpenSyncModal('hub')}
+              className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl text-xs font-bold border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 transition-all cursor-pointer"
+              title="Sinkronkan Laporan & Transaksi dengan Google Sheets"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Sinkron Sheets</span>
+            </button>
           )}
           {/* Export PDF Button */}
           <button

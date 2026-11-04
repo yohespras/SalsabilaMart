@@ -1,21 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Menu,
   Bell,
   AlertTriangle,
-  Shield,
   LogOut,
   Sun,
   Moon,
   PanelLeftClose,
   PanelLeftOpen,
-  Globe,
   Key,
   Cloud,
   RefreshCw,
   CheckCircle2,
   HardDrive,
 } from 'lucide-react';
+import { User } from 'firebase/auth';
 import {
   CartItem,
   GoogleSheetsConfig,
@@ -23,14 +22,8 @@ import {
   StoreProfile,
   Transaction,
   UserProfile,
-  UserRole,
 } from './types';
 import {
-  DEFAULT_STORE_PROFILE,
-  INITIAL_PRODUCTS,
-  INITIAL_TRANSACTIONS,
-  INITIAL_USERS,
-  clearStoredTransactions,
   getLocalDateString,
   loadDarkMode,
   loadStoredProfile,
@@ -45,7 +38,30 @@ import {
   saveStoredUsers,
   saveStoredSheetsConfig,
 } from './services/storage';
-import { googleSignIn, initAuth, logoutGoogle, formatFirebaseAuthError, testFirestoreConnection } from './services/auth';
+import {
+  googleSignIn,
+  initAuth,
+  logoutGoogle,
+  formatFirebaseAuthError,
+  testFirestoreConnection,
+} from './services/auth';
+import {
+  CloudStoreWorkspace,
+  canUseCloudSync,
+  ensureCloudStoreWorkspace,
+  subscribeToCloudStore,
+  upsertCloudStoreSettings,
+  upsertCloudProduct,
+  updateCloudProductStockOnly,
+  deleteCloudProduct,
+  createCloudTransaction,
+  markCloudTransactionsSyncedToSheet,
+  syncImportedProductsToCloud,
+  syncImportedTransactionsToCloud,
+  upsertCloudStaffProfile,
+  deleteCloudStaffProfile,
+  propagateAllowedEmailsToStoreDocs,
+} from './services/cloudSync';
 import {
   appendTransactionToSheet,
   batchAppendTransactionsToSheet,
@@ -74,8 +90,88 @@ import { SheetsSyncModal, SyncModalInitialMode } from './components/SheetsSyncMo
 import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { GlobalScannerSink } from './services/hardwareScanner';
 
-export default function App() {
+interface ErrorBoundaryState {
+  hasError: boolean;
+  errorMessage: string;
+}
+
+class AppErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  ErrorBoundaryState
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, errorMessage: '' };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    let readable = error?.message || 'Terjadi gangguan tak terduga pada aplikasi.';
+    try {
+      const parsed = JSON.parse(readable);
+      if (parsed && parsed.error) {
+        readable = `Gangguan sinkronisasi Cloud (${parsed.operationType || 'akses'}): ${parsed.error}`;
+      }
+    } catch {
+      // Bukan JSON FirestoreErrorInfo
+    }
+    return { hasError: true, errorMessage: readable };
+  }
+
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error('AppErrorBoundary caught error:', error, info);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6">
+          <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4 shadow-xl">
+            <div className="flex items-center gap-3 text-amber-400">
+              <AlertTriangle className="w-6 h-6 shrink-0" />
+              <h2 className="text-base font-black">Gangguan Sinkronisasi Aplikasi</h2>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              {this.state.errorMessage}
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
+            >
+              Muat Ulang Aplikasi
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function parseCloudErrorMessage(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err || '');
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed.error === 'string') {
+      if (parsed.error.includes('Missing or insufficient permissions')) {
+        return 'Akses Cloud ditolak: pastikan email Google Anda terdaftar sebagai Admin atau Staf Kasir toko.';
+      }
+      if (parsed.error.includes('resource-exhausted') || parsed.error.includes('Quota')) {
+        return 'Kuota sinkronisasi harian Cloud penuh sementara. Data tetap aman tersimpan di perangkat.';
+      }
+      return `Sinkronisasi Cloud tertunda: ${parsed.error}`;
+    }
+  } catch {
+    // bukan JSON
+  }
+  return raw || 'Sinkronisasi Cloud tertunda, data tersimpan aman di perangkat lokal.';
+}
+
+function AppContent() {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
+  const [cloudWorkspace, setCloudWorkspace] = useState<CloudStoreWorkspace | null>(null);
+  const [isConnectingCloud, setIsConnectingCloud] = useState(false);
+
   const [isLoginPageOpen, setIsLoginPageOpen] = useState(false);
   const [isLoggingInGoogle, setIsLoggingInGoogle] = useState(false);
 
@@ -88,7 +184,7 @@ export default function App() {
   const [isOpenMobile, setIsOpenMobile] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
-  // Core Data States
+  // Core Data States (Starts cleanly from 0 products & 0 transactions)
   const [products, setProducts] = useState<Product[]>(() => loadStoredProducts());
   const [transactions, setTransactions] = useState<Transaction[]>(() =>
     loadStoredTransactions()
@@ -97,12 +193,31 @@ export default function App() {
   const [users, setUsers] = useState<UserProfile[]>(() => loadStoredUsers());
   const [cart, setCart] = useState<CartItem[]>([]);
 
-  // Google Sheets Config (Loaded from persistent localStorage)
+  // Google Sheets Config (Loaded from persistent localStorage & synced via Cloud)
   const [sheetsConfig, setSheetsConfig] = useState<GoogleSheetsConfig>(() =>
     loadStoredSheetsConfig()
   );
   const [isSyncingToSheets, setIsSyncingToSheets] = useState(false);
   const [syncToastMessage, setSyncToastMessage] = useState<string | null>(null);
+
+  // Refs for fresh state access inside listeners and async callbacks
+  const currentUserRef = useRef(currentUser);
+  const firebaseUserRef = useRef(firebaseUser);
+  const cloudWorkspaceRef = useRef(cloudWorkspace);
+  const productsRef = useRef(products);
+  const transactionsRef = useRef(transactions);
+  const storeProfileRef = useRef(storeProfile);
+  const sheetsConfigRef = useRef(sheetsConfig);
+  const usersRef = useRef(users);
+
+  currentUserRef.current = currentUser;
+  firebaseUserRef.current = firebaseUser;
+  cloudWorkspaceRef.current = cloudWorkspace;
+  productsRef.current = products;
+  transactionsRef.current = transactions;
+  storeProfileRef.current = storeProfile;
+  sheetsConfigRef.current = sheetsConfig;
+  usersRef.current = users;
 
   const showAppToast = (msg: string, duration = 4000) => {
     setSyncToastMessage(msg);
@@ -111,12 +226,24 @@ export default function App() {
     }, duration);
   };
 
+  const runCloudTask = async <T,>(promise: Promise<T>): Promise<T | null> => {
+    try {
+      return await promise;
+    } catch (err) {
+      const msg = parseCloudErrorMessage(err);
+      showAppToast(msg, 5000);
+      return null;
+    }
+  };
+
   // Modal States
   const [isLowStockModalOpen, setIsLowStockModalOpen] = useState(false);
   const [receiptModalTx, setReceiptModalTx] = useState<Transaction | null>(null);
   const [isOnlineModalOpen, setIsOnlineModalOpen] = useState(false);
   const [isChangePinModalOpen, setIsChangePinModalOpen] = useState(false);
   const [sheetsSyncModalMode, setSheetsSyncModalMode] = useState<SyncModalInitialMode | null>(null);
+
+  const isCloudSynced = Boolean(cloudWorkspace && firebaseUser);
 
   // Persist dark mode and sync root html element
   useEffect(() => {
@@ -132,7 +259,7 @@ export default function App() {
     setIsDark((prev) => !prev);
   };
 
-  // Sync core collections to localStorage
+  // Sync core collections to localStorage (Offline-First Resilience)
   useEffect(() => {
     saveStoredProducts(products);
   }, [products]);
@@ -153,50 +280,193 @@ export default function App() {
     saveStoredSheetsConfig(sheetsConfig);
   }, [sheetsConfig]);
 
-  // Firebase auth state initialization & connection test
+  // 1. Initialize Firebase Auth listener ONCE on startup
   useEffect(() => {
     testFirestoreConnection();
-    initAuth(
+    const unsubscribeAuth = initAuth(
       (user) => {
-        if (!currentUser) {
-          const matched = users.find((u) => u.email.toLowerCase() === user.email?.toLowerCase());
-          if (matched) {
-            setCurrentUser(matched);
-          } else {
-            setCurrentUser({
-              id: user.uid,
-              name: user.displayName || 'Salsabila (Pemilik Toko)',
-              email: user.email || 'salsabilamart684@gmail.com',
-              role: 'admin',
-              isActive: true,
-              avatar: user.photoURL || undefined,
-            });
-          }
-        }
+        setFirebaseUser(user);
       },
       () => {
-        // Logged out
+        setFirebaseUser(null);
+        setCloudWorkspace(null);
       }
     );
-  }, [currentUser, users]);
+    return () => {
+      unsubscribeAuth();
+    };
+  }, []);
 
-  // Handle Google Login
+  // 2. Bootstrap & Subscribe to Real-Time Multi-Device Cloud Store whenever Google user is active
+  useEffect(() => {
+    if (!firebaseUser || !canUseCloudSync(firebaseUser)) {
+      setCloudWorkspace(null);
+      return;
+    }
+
+    let cancelled = false;
+    let unsubCloudStore: (() => void) | null = null;
+
+    const setupCloudSync = async () => {
+      setIsConnectingCloud(true);
+      try {
+        const ws = await ensureCloudStoreWorkspace(
+          firebaseUser,
+          storeProfileRef.current,
+          sheetsConfigRef.current,
+          productsRef.current,
+          transactionsRef.current,
+          usersRef.current
+        );
+
+        if (cancelled || !ws) return;
+
+        setCloudWorkspace(ws);
+        cloudWorkspaceRef.current = ws;
+
+        // Auto-login atau sesuaikan profil pengguna berdasarkan akun Google yang aktif
+        const userEmailLower = (firebaseUser.email || '').toLowerCase();
+        const matchedStaff = usersRef.current.find(
+          (u) => u.email.toLowerCase() === userEmailLower
+        );
+        const resolvedRole = ws.isOwner ? 'admin' : matchedStaff?.role || 'kasir';
+
+        if (!currentUserRef.current) {
+          const nextUser: UserProfile = matchedStaff
+            ? {
+                ...matchedStaff,
+                role: resolvedRole,
+                avatar: firebaseUser.photoURL || matchedStaff.avatar,
+              }
+            : {
+                id: firebaseUser.uid,
+                name:
+                  firebaseUser.displayName ||
+                  (ws.isOwner ? 'Salsabila (Pemilik Toko)' : 'Kasir Toko'),
+                email: firebaseUser.email || 'salsabilamart684@gmail.com',
+                role: resolvedRole,
+                isActive: true,
+                transactionsServed: 0,
+                isDemo: false,
+                avatar: firebaseUser.photoURL || undefined,
+              };
+          setCurrentUser(nextUser);
+          setIsLoginPageOpen(false);
+          if (nextUser.role === 'kasir') {
+            setActiveTab('pos');
+          }
+        }
+
+        // Berlangganan snapshot real-time lintas perangkat (HP, Tablet, Laptop)
+        unsubCloudStore = subscribeToCloudStore(ws, firebaseUser, {
+          onStoreSettings: (nextProfile, sheetsPatch, allowedEmails) => {
+            if (cancelled) return;
+            setStoreProfile(nextProfile);
+            setSheetsConfig((prev) => ({
+              ...prev,
+              ...sheetsPatch,
+            }));
+            setCloudWorkspace((prev) =>
+              prev ? { ...prev, allowedEmails } : prev
+            );
+          },
+          onProducts: (cloudProducts) => {
+            if (cancelled) return;
+            setProducts(cloudProducts);
+          },
+          onTransactions: (cloudTransactions) => {
+            if (cancelled) return;
+            setTransactions(cloudTransactions);
+          },
+          onUsers: (cloudUsers) => {
+            if (cancelled) return;
+            if (ws.isOwner) {
+              setUsers(cloudUsers);
+              const active = currentUserRef.current;
+              if (active) {
+                const updatedSelf = cloudUsers.find(
+                  (u) =>
+                    u.id === active.id ||
+                    u.email.toLowerCase() === active.email.toLowerCase()
+                );
+                if (updatedSelf) {
+                  setCurrentUser((prev) =>
+                    prev ? { ...prev, ...updatedSelf, role: 'admin' } : prev
+                  );
+                }
+              }
+            } else if (cloudUsers.length > 0) {
+              const selfProfile = cloudUsers[0];
+              setUsers((prev) => {
+                const exists = prev.some((u) => u.id === selfProfile.id);
+                return exists
+                  ? prev.map((u) => (u.id === selfProfile.id ? selfProfile : u))
+                  : [...prev, selfProfile];
+              });
+              setCurrentUser((prev) =>
+                prev && prev.email.toLowerCase() === selfProfile.email.toLowerCase()
+                  ? { ...prev, ...selfProfile }
+                  : prev
+              );
+            }
+          },
+        });
+      } catch (err) {
+        if (!cancelled) {
+          showAppToast(parseCloudErrorMessage(err), 5000);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsConnectingCloud(false);
+        }
+      }
+    };
+
+    setupCloudSync();
+
+    return () => {
+      cancelled = true;
+      if (unsubCloudStore) {
+        unsubCloudStore();
+      }
+    };
+  }, [firebaseUser?.uid]);
+
+  // Handle Google Login from LoginPage
   const handleGoogleLogin = async () => {
     setIsLoggingInGoogle(true);
     try {
       const res = await googleSignIn();
       if (res) {
-        const authedUser: UserProfile = {
-          id: res.user.uid,
-          name: res.user.displayName || 'Salsabila (Pemilik Toko)',
-          email: res.user.email || 'salsabilamart684@gmail.com',
-          role: 'admin',
-          isActive: true,
-          avatar: res.user.photoURL || undefined,
-        };
+        setFirebaseUser(res.user);
+        const emailLower = (res.user.email || '').toLowerCase();
+        const matched = usersRef.current.find(
+          (u) => u.email.toLowerCase() === emailLower
+        );
+        const isPrimaryAdmin = emailLower === 'salsabilamart684@gmail.com';
+        const resolvedRole = isPrimaryAdmin ? 'admin' : matched?.role || 'admin';
+
+        const authedUser: UserProfile = matched
+          ? {
+              ...matched,
+              role: resolvedRole,
+              avatar: res.user.photoURL || matched.avatar,
+            }
+          : {
+              id: res.user.uid,
+              name: res.user.displayName || 'Salsabila (Pemilik Toko)',
+              email: res.user.email || 'salsabilamart684@gmail.com',
+              role: resolvedRole,
+              isActive: true,
+              transactionsServed: 0,
+              isDemo: false,
+              avatar: res.user.photoURL || undefined,
+            };
+
         setCurrentUser(authedUser);
-        setActiveTab('dashboard');
+        setActiveTab(authedUser.role === 'kasir' ? 'pos' : 'dashboard');
         setIsLoginPageOpen(false);
+        showAppToast('Login Google berhasil! Data toko otomatis disinkronkan lintas perangkat.', 4500);
       }
     } catch (err: any) {
       console.error('Google login failed:', err);
@@ -204,6 +474,27 @@ export default function App() {
       showAppToast(friendlyMsg, 5000);
     } finally {
       setIsLoggingInGoogle(false);
+    }
+  };
+
+  // Connect Google Cloud Sync while already logged in via local PIN
+  const handleConnectCloud = async () => {
+    if (isConnectingCloud) return;
+    setIsConnectingCloud(true);
+    try {
+      const res = await googleSignIn();
+      if (res) {
+        setFirebaseUser(res.user);
+        showAppToast(
+          `Sinkronisasi Cloud aktif (${res.user.email})! Data otomatis sama di semua perangkat.`,
+          5000
+        );
+      }
+    } catch (err: any) {
+      const friendlyMsg = formatFirebaseAuthError(err);
+      showAppToast(friendlyMsg, 5000);
+    } finally {
+      setIsConnectingCloud(false);
     }
   };
 
@@ -223,6 +514,8 @@ export default function App() {
     } catch {
       // ignore
     }
+    setFirebaseUser(null);
+    setCloudWorkspace(null);
     setCurrentUser(null);
     setIsLoginPageOpen(false);
   };
@@ -234,7 +527,7 @@ export default function App() {
     sheetsConfig.status === 'connected' || sheetsConfig.spreadsheetId || sheetsConfig.webhookUrl
   );
 
-  // Push full local state (Dashboard + Transactions including 0 + Products) to Google Sheets
+  // Push full local state (Dashboard + Transactions + Products) to Google Sheets
   const handlePushFullToSheet = async () => {
     if (!isOnline) {
       showAppToast('Perangkat sedang offline. Sambungkan internet untuk menyinkronkan Google Sheets.');
@@ -243,7 +536,7 @@ export default function App() {
     setIsSyncingToSheets(true);
     setSyncToastMessage(
       transactions.length === 0
-        ? 'Mengosongkan lembar Transaksi & memperbarui Dashboard Rp 0 di Google Sheets...'
+        ? 'Menyinkronkan kondisi awal 0 transaksi & produk ke Google Sheets...'
         : 'Menyinkronkan penuh Dashboard, Transaksi & Produk ke Google Sheets...'
     );
     try {
@@ -256,14 +549,28 @@ export default function App() {
         true
       );
       if (res.success) {
+        const allTxIds = transactions.map((t) => t.id);
         if (transactions.length > 0) {
           setTransactions((prev) => prev.map((t) => ({ ...t, syncedToSheet: true })));
         }
-        setSheetsConfig((prev) => ({
-          ...prev,
+        const nextCfg: GoogleSheetsConfig = {
+          ...sheetsConfig,
           lastSyncedAt: new Date().toISOString(),
           status: 'connected',
-        }));
+        };
+        setSheetsConfig(nextCfg);
+
+        const ws = cloudWorkspaceRef.current;
+        const fbUser = firebaseUserRef.current;
+        if (ws && fbUser) {
+          if (allTxIds.length > 0) {
+            await runCloudTask(markCloudTransactionsSyncedToSheet(ws, fbUser, allTxIds));
+          }
+          await runCloudTask(
+            upsertCloudStoreSettings(ws, fbUser, storeProfileRef.current, nextCfg, usersRef.current)
+          );
+        }
+
         showAppToast(res.message, 5000);
       } else {
         showAppToast(res.message, 6000);
@@ -275,7 +582,7 @@ export default function App() {
     }
   };
 
-  // Pull full state (Transactions including 0 + Products) from Google Sheets to Dashboard
+  // Pull full state (Transactions + Products) from Google Sheets to Dashboard & Cloud
   const handlePullFullFromSheet = async () => {
     if (!isOnline) {
       showAppToast('Perangkat sedang offline. Sambungkan internet untuk menarik data Google Sheets.');
@@ -290,19 +597,34 @@ export default function App() {
         sheetsConfig.webhookUrl
       );
       if (res.success) {
+        const ws = cloudWorkspaceRef.current;
+        const fbUser = firebaseUserRef.current;
+
         if (res.products && res.products.length > 0) {
           setProducts(res.products);
           saveStoredProducts(res.products);
+          if (ws && fbUser) {
+            await runCloudTask(syncImportedProductsToCloud(ws, fbUser, res.products));
+          }
         }
         if (res.transactions !== null) {
           setTransactions(res.transactions);
           saveStoredTransactions(res.transactions);
+          if (ws && fbUser) {
+            await runCloudTask(syncImportedTransactionsToCloud(ws, fbUser, res.transactions));
+          }
         }
-        setSheetsConfig((prev) => ({
-          ...prev,
+        const nextCfg: GoogleSheetsConfig = {
+          ...sheetsConfig,
           lastSyncedAt: new Date().toISOString(),
           status: 'connected',
-        }));
+        };
+        setSheetsConfig(nextCfg);
+        if (ws && fbUser) {
+          await runCloudTask(
+            upsertCloudStoreSettings(ws, fbUser, storeProfileRef.current, nextCfg, usersRef.current)
+          );
+        }
         showAppToast(res.message, 5000);
       } else {
         showAppToast(res.message, 6000);
@@ -311,53 +633,6 @@ export default function App() {
       showAppToast(`Gagal menarik data dari Google Sheets: ${err.message || 'Periksa koneksi'}`, 5000);
     } finally {
       setIsSyncingToSheets(false);
-    }
-  };
-
-  // Zero out all transactions in App (and optionally clear Google Sheets Transaksi + update Dashboard Rp 0)
-  const handleZeroAllTransactions = async (alsoClearSheet: boolean) => {
-    setTransactions([]);
-    clearStoredTransactions();
-
-    if (alsoClearSheet && (sheetsConfig.spreadsheetId || sheetsConfig.webhookUrl)) {
-      if (!isOnline) {
-        showAppToast(
-          'Transaksi aplikasi telah di-0-kan! Sambungkan internet lalu klik "Sinkron Spreadsheets" untuk meng-0-kan Google Sheets.',
-          6000
-        );
-        return;
-      }
-      setIsSyncingToSheets(true);
-      setSyncToastMessage('Mengosongkan (0-kan) lembar Transaksi & memperbarui Dashboard di Google Sheets...');
-      try {
-        const res = await overwriteFullStateToSheet(
-          sheetsConfig.spreadsheetId,
-          storeProfile,
-          [],
-          products,
-          sheetsConfig.webhookUrl,
-          true
-        );
-        if (res.success) {
-          setSheetsConfig((prev) => ({
-            ...prev,
-            lastSyncedAt: new Date().toISOString(),
-            status: 'connected',
-          }));
-          showAppToast(
-            'Berhasil! Data transaksi di Dashboard aplikasi dan Google Sheets telah sama-sama di-0-kan (Rp 0).',
-            5000
-          );
-        } else {
-          showAppToast(`Transaksi aplikasi sudah 0, namun gagal update Sheet: ${res.message}`, 6000);
-        }
-      } catch (err: any) {
-        showAppToast(`Transaksi aplikasi sudah 0, namun gagal update Sheet: ${err.message}`, 5000);
-      } finally {
-        setIsSyncingToSheets(false);
-      }
-    } else {
-      showAppToast('Seluruh data transaksi di Dashboard aplikasi berhasil di-0-kan (Rp 0)!', 4500);
     }
   };
 
@@ -385,7 +660,6 @@ export default function App() {
     if (unSynced.length === 0) {
       if (!silent) {
         if (currentUser?.role === 'admin') {
-          // Buka modal sinkronisasi 2 arah agar Admin bisa menyamakan kondisi 0 / tarik dari Sheet
           setSheetsSyncModalMode('hub');
         } else {
           showAppToast('Semua transaksi kasir sudah tersinkronkan ke Google Sheets!');
@@ -409,15 +683,27 @@ export default function App() {
       );
 
       if (res.success) {
-        const syncedIds = new Set(unSynced.map((t) => t.id));
+        const syncedIdArray = unSynced.map((t) => t.id);
+        const syncedIds = new Set(syncedIdArray);
         setTransactions((prev) =>
           prev.map((t) => (syncedIds.has(t.id) ? { ...t, syncedToSheet: true } : t))
         );
-        setSheetsConfig((prev) => ({
-          ...prev,
+        const nextCfg: GoogleSheetsConfig = {
+          ...sheetsConfig,
           lastSyncedAt: new Date().toISOString(),
           status: 'connected',
-        }));
+        };
+        setSheetsConfig(nextCfg);
+
+        const ws = cloudWorkspaceRef.current;
+        const fbUser = firebaseUserRef.current;
+        if (ws && fbUser) {
+          await runCloudTask(markCloudTransactionsSyncedToSheet(ws, fbUser, syncedIdArray));
+          await runCloudTask(
+            upsertCloudStoreSettings(ws, fbUser, storeProfileRef.current, nextCfg, usersRef.current)
+          );
+        }
+
         showAppToast(
           `Berhasil menyinkronkan ${unSynced.length} transaksi & memperbarui Dashboard Google Sheets!`,
           4000
@@ -438,7 +724,6 @@ export default function App() {
     if (isOnline && (sheetsConfig.spreadsheetId || sheetsConfig.webhookUrl)) {
       const unSynced = transactions.filter((t) => !t.syncedToSheet);
       if (unSynced.length > 0) {
-        console.log(`[Auto-Sync] Internet online, menyinkronkan ${unSynced.length} transaksi ke Google Sheets...`);
         handleSyncPendingTransactions(true);
       }
     }
@@ -459,7 +744,7 @@ export default function App() {
     setActiveTab('pos');
   };
 
-  // Complete a sale from POS (Berjalan 100% Offline & Auto-Sync saat Online)
+  // Complete a sale from POS (Offline-First + Real-Time Multi-Device Cloud + Google Sheets)
   const handleCompleteSale = async (
     newTransaction: Transaction,
     updatedProducts: Product[]
@@ -469,7 +754,7 @@ export default function App() {
       syncedToSheet: false,
     };
 
-    // If online and Google Sheets is connected, try to sync immediately!
+    // If online and Google Sheets is connected, try to sync immediately
     if (isOnline && (sheetsConfig.spreadsheetId || sheetsConfig.webhookUrl)) {
       try {
         const nextAllTransactions = [newTransaction, ...transactions];
@@ -499,18 +784,42 @@ export default function App() {
     setProducts(updatedProducts);
 
     // Update transactions served count for active user
+    let updatedActiveStaff: UserProfile | null = null;
     if (currentUser) {
       setUsers((prev) =>
-        prev.map((u) =>
-          u.id === currentUser.id
-            ? { ...u, transactionsServed: (u.transactionsServed || 0) + 1 }
-            : u
-        )
+        prev.map((u) => {
+          if (u.id === currentUser.id || u.email.toLowerCase() === currentUser.email.toLowerCase()) {
+            const nextU = { ...u, transactionsServed: (u.transactionsServed || 0) + 1 };
+            updatedActiveStaff = nextU;
+            return nextU;
+          }
+          return u;
+        })
+      );
+    }
+
+    // Push transaction & updated product stock to Cloud Firestore so other devices update immediately
+    const ws = cloudWorkspaceRef.current;
+    const fbUser = firebaseUserRef.current;
+    if (ws && fbUser) {
+      const soldIds = new Set(txToSave.items.map((item) => item.productId));
+      const changedProducts = updatedProducts.filter((p) => soldIds.has(p.id));
+
+      void runCloudTask(
+        (async () => {
+          await createCloudTransaction(ws, fbUser, txToSave);
+          for (const prod of changedProducts) {
+            await updateCloudProductStockOnly(ws, fbUser, prod.id, prod.stock, prod.updatedAt);
+          }
+          if (updatedActiveStaff) {
+            await upsertCloudStaffProfile(ws, fbUser, updatedActiveStaff);
+          }
+        })()
       );
     }
   };
 
-  // Inventory modifications
+  // Inventory modifications (Local + Multi-Device Cloud Sync)
   const handleAddProduct = (newProdData: Omit<Product, 'id' | 'updatedAt'>): Product => {
     const newProduct: Product = {
       ...newProdData,
@@ -518,102 +827,192 @@ export default function App() {
       updatedAt: new Date().toISOString(),
     };
     setProducts((prev) => [newProduct, ...prev]);
+
+    const ws = cloudWorkspaceRef.current;
+    const fbUser = firebaseUserRef.current;
+    if (ws && fbUser) {
+      void runCloudTask(upsertCloudProduct(ws, fbUser, newProduct));
+    }
     return newProduct;
   };
 
   const handleUpdateProduct = (updated: Product) => {
-    setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+    const stamped: Product = {
+      ...updated,
+      updatedAt: new Date().toISOString(),
+    };
+    setProducts((prev) => prev.map((p) => (p.id === stamped.id ? stamped : p)));
+
+    const ws = cloudWorkspaceRef.current;
+    const fbUser = firebaseUserRef.current;
+    if (ws && fbUser) {
+      void runCloudTask(upsertCloudProduct(ws, fbUser, stamped));
+    }
   };
 
   const handleDeleteProduct = (productId: string) => {
     setProducts((prev) => prev.filter((p) => p.id !== productId));
+
+    const ws = cloudWorkspaceRef.current;
+    const fbUser = firebaseUserRef.current;
+    if (ws && fbUser) {
+      void runCloudTask(deleteCloudProduct(ws, fbUser, productId));
+    }
   };
 
   const handleQuickRestock = (productId: string, addQty: number) => {
+    const nextUpdatedAt = new Date().toISOString();
+    let targetNewStock: number | null = null;
+
     setProducts((prev) =>
-      prev.map((p) =>
-        p.id === productId
-          ? { ...p, stock: p.stock + addQty, updatedAt: new Date().toISOString() }
-          : p
-      )
+      prev.map((p) => {
+        if (p.id === productId) {
+          targetNewStock = p.stock + addQty;
+          return { ...p, stock: targetNewStock, updatedAt: nextUpdatedAt };
+        }
+        return p;
+      })
     );
+
+    const ws = cloudWorkspaceRef.current;
+    const fbUser = firebaseUserRef.current;
+    if (ws && fbUser && targetNewStock !== null) {
+      const finalStock = targetNewStock;
+      void runCloudTask(
+        updateCloudProductStockOnly(ws, fbUser, productId, finalStock, nextUpdatedAt)
+      );
+    }
   };
 
-  // User management operations
+  // Store Profile & Google Sheets Config updates (Local + Multi-Device Cloud Sync)
+  const handleSaveProfile = (nextProfile: StoreProfile) => {
+    setStoreProfile(nextProfile);
+    const ws = cloudWorkspaceRef.current;
+    const fbUser = firebaseUserRef.current;
+    if (ws && fbUser) {
+      void runCloudTask(
+        upsertCloudStoreSettings(ws, fbUser, nextProfile, sheetsConfigRef.current, usersRef.current)
+      );
+    }
+  };
+
+  const handleUpdateSheetsConfig = (nextCfg: GoogleSheetsConfig) => {
+    setSheetsConfig(nextCfg);
+    const ws = cloudWorkspaceRef.current;
+    const fbUser = firebaseUserRef.current;
+    if (ws && fbUser) {
+      void runCloudTask(
+        upsertCloudStoreSettings(ws, fbUser, storeProfileRef.current, nextCfg, usersRef.current)
+      );
+    }
+  };
+
+  // User management operations (Local + Multi-Device Cloud Sync + Staff Email Access Propagation)
+  const syncStaffListAccessToCloud = async (nextUsers: UserProfile[], targetStaff?: UserProfile) => {
+    const ws = cloudWorkspaceRef.current;
+    const fbUser = firebaseUserRef.current;
+    if (!ws || !fbUser) return;
+
+    if (targetStaff) {
+      await upsertCloudStaffProfile(ws, fbUser, targetStaff);
+    }
+    const nextAllowedEmails = await upsertCloudStoreSettings(
+      ws,
+      fbUser,
+      storeProfileRef.current,
+      sheetsConfigRef.current,
+      nextUsers
+    );
+    setCloudWorkspace((prev) =>
+      prev ? { ...prev, allowedEmails: nextAllowedEmails } : prev
+    );
+    await propagateAllowedEmailsToStoreDocs(ws, fbUser, nextAllowedEmails);
+  };
+
   const handleAddUser = (newUserData: Omit<UserProfile, 'id'>) => {
     const newUser: UserProfile = {
       ...newUserData,
       id: `user-${Date.now()}`,
+      isDemo: false,
     };
-    setUsers((prev) => [...prev, newUser]);
+    const nextUsers = [...usersRef.current, newUser];
+    setUsers(nextUsers);
+    void runCloudTask(syncStaffListAccessToCloud(nextUsers, newUser));
   };
 
-  const handleRegisterUser = (newUserData: Omit<UserProfile, 'id'>, clearDemo = true) => {
+  const handleRegisterUser = (newUserData: Omit<UserProfile, 'id'>) => {
     const newUser: UserProfile = {
       ...newUserData,
       id: `user-${Date.now()}`,
+      isDemo: false,
     };
-    setUsers((prev) => {
-      const filtered = clearDemo ? prev.filter((u) => !u.isDemo) : prev;
-      return [newUser, ...filtered];
-    });
+    const nextUsers = [newUser, ...usersRef.current.filter((u) => !u.isDemo)];
+    setUsers(nextUsers);
     setCurrentUser(newUser);
     setIsLoginPageOpen(false);
+    void runCloudTask(syncStaffListAccessToCloud(nextUsers, newUser));
   };
 
   const handleUpdateUserPin = (userId: string, newPin: string) => {
-    setUsers((prev) =>
-      prev.map((u) => (u.id === userId ? { ...u, pin: newPin, password: newPin, isDemo: false } : u))
-    );
-    if (currentUser && currentUser.id === userId) {
-      setCurrentUser((prev) => (prev ? { ...prev, pin: newPin, password: newPin, isDemo: false } : null));
-    }
-  };
+    let updatedTarget: UserProfile | undefined;
+    const nextUsers = usersRef.current.map((u) => {
+      if (u.id === userId) {
+        updatedTarget = { ...u, pin: newPin, password: newPin, isDemo: false };
+        return updatedTarget;
+      }
+      return u;
+    });
+    setUsers(nextUsers);
 
-  const handleClearDemoUsers = () => {
-    const realUsers = users.filter((u) => !u.isDemo);
-    if (realUsers.length === 0) {
-      const primaryRealUser: UserProfile = {
-        id: `user-${Date.now()}`,
-        name: 'Salsabila (Pemilik Toko)',
-        email: storeProfile.email || 'salsabilamart684@gmail.com',
-        phone: storeProfile.phone,
-        role: 'admin',
-        pin: '123456',
-        isActive: true,
-        transactionsServed: 0,
-        isDemo: false,
-      };
-      setUsers([primaryRealUser]);
-      showAppToast('Semua akun demo berhasil dibersihkan! Akun Real "Salsabila" telah disiapkan.');
-    } else {
-      setUsers(realUsers);
-      showAppToast(`Berhasil membersihkan akun demo. Sekarang tersisa ${realUsers.length} akun real.`);
+    if (currentUser && currentUser.id === userId) {
+      setCurrentUser((prev) =>
+        prev ? { ...prev, pin: newPin, password: newPin, isDemo: false } : null
+      );
+    }
+
+    const ws = cloudWorkspaceRef.current;
+    const fbUser = firebaseUserRef.current;
+    if (ws && fbUser && updatedTarget) {
+      void runCloudTask(upsertCloudStaffProfile(ws, fbUser, updatedTarget));
     }
   };
 
   const handleUpdateUser = (updated: UserProfile) => {
-    setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
-    if (currentUser && currentUser.id === updated.id) {
-      setCurrentUser(updated);
+    const cleanUpdated: UserProfile = { ...updated, isDemo: false };
+    const nextUsers = usersRef.current.map((u) =>
+      u.id === cleanUpdated.id ? cleanUpdated : u
+    );
+    setUsers(nextUsers);
+    if (currentUser && currentUser.id === cleanUpdated.id) {
+      setCurrentUser(cleanUpdated);
     }
+    void runCloudTask(syncStaffListAccessToCloud(nextUsers, cleanUpdated));
   };
 
   const handleDeleteUser = (userId: string) => {
-    setUsers((prev) => prev.filter((u) => u.id !== userId));
-  };
+    const nextUsers = usersRef.current.filter((u) => u.id !== userId);
+    setUsers(nextUsers);
 
-  const handleResetDemoData = () => {
-    setProducts(INITIAL_PRODUCTS);
-    setTransactions(INITIAL_TRANSACTIONS);
-    setStoreProfile(DEFAULT_STORE_PROFILE);
-    setUsers(INITIAL_USERS);
-    setCart([]);
-    saveStoredProducts(INITIAL_PRODUCTS);
-    saveStoredTransactions(INITIAL_TRANSACTIONS);
-    saveStoredProfile(DEFAULT_STORE_PROFILE);
-    saveStoredUsers(INITIAL_USERS);
-    showAppToast('Data toko telah berhasil direset ke data awal.');
+    const ws = cloudWorkspaceRef.current;
+    const fbUser = firebaseUserRef.current;
+    if (ws && fbUser) {
+      void runCloudTask(
+        (async () => {
+          await deleteCloudStaffProfile(ws, fbUser, userId);
+          const nextAllowed = await upsertCloudStoreSettings(
+            ws,
+            fbUser,
+            storeProfileRef.current,
+            sheetsConfigRef.current,
+            nextUsers
+          );
+          setCloudWorkspace((prev) =>
+            prev ? { ...prev, allowedEmails: nextAllowed } : prev
+          );
+          await propagateAllowedEmailsToStoreDocs(ws, fbUser, nextAllowed);
+        })()
+      );
+    }
   };
 
   const lowStockCount = products.filter((p) => p.stock <= p.minStock).length;
@@ -628,7 +1027,6 @@ export default function App() {
         onLoginSuccess={handleLoginSuccess}
         onRegisterUser={handleRegisterUser}
         onUpdateUserPin={handleUpdateUserPin}
-        onClearDemoUsers={handleClearDemoUsers}
         onGoogleLogin={handleGoogleLogin}
         onBackToProfile={() => setIsLoginPageOpen(false)}
         isLoggingInGoogle={isLoggingInGoogle}
@@ -746,7 +1144,7 @@ export default function App() {
                       ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25'
                       : 'bg-amber-500/20 text-amber-400 border border-amber-500/40 hover:bg-amber-500/30 animate-pulse'
                   }`}
-                  title={isOnline ? 'Online (Terhubung Cloud)' : 'Mode Offline (Data Disimpan Lokal)'}
+                  title={isOnline ? 'Online (Terhubung Internet)' : 'Mode Offline (Data Disimpan Lokal)'}
                 >
                   <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-400' : 'bg-amber-400'}`} />
                   <span>{isOnline ? 'Online' : 'Offline'}</span>
@@ -762,20 +1160,56 @@ export default function App() {
           <div className="flex items-center gap-2">
             {/* In-App PWA Install Button */}
             <PWAInstallButton variant="header" isDark={isDark} />
+
+            {/* Multi-Device Cloud Sync Status / Connect Trigger */}
+            {isCloudSynced ? (
+              <div
+                className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold border ${
+                  isDark
+                    ? 'bg-teal-950/40 border-teal-500/30 text-teal-300'
+                    : 'bg-teal-50 border-teal-300 text-teal-700 shadow-2xs'
+                }`}
+                title={`Sinkronisasi Lintas Perangkat Aktif (${firebaseUser?.email || ''})`}
+              >
+                <Cloud className="w-3.5 h-3.5 text-teal-400" />
+                <span className="hidden lg:inline">Cloud: Sinkron</span>
+              </div>
+            ) : (
+              <button
+                onClick={handleConnectCloud}
+                disabled={isConnectingCloud}
+                className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                  isDark
+                    ? 'bg-sky-950/50 border-sky-500/40 text-sky-300 hover:bg-sky-900/50'
+                    : 'bg-sky-50 border-sky-300 text-sky-700 hover:bg-sky-100 shadow-2xs'
+                }`}
+                title="Hubungkan Akun Google agar data produk, stok & transaksi otomatis sama di HP, Tablet, dan Laptop lain"
+              >
+                {isConnectingCloud ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-sky-400" />
+                ) : (
+                  <Cloud className="w-3.5 h-3.5 text-sky-400" />
+                )}
+                <span className="hidden md:inline">
+                  {isConnectingCloud ? 'Menghubungkan...' : 'Sinkron Perangkat'}
+                </span>
+              </button>
+            )}
+
             {/* Pakai Tanpa Hosting & Panduan Lokal Button */}
             <button
               onClick={() => setIsOnlineModalOpen(true)}
-              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+              className={`hidden xl:flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
                 isDark
                   ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-400 hover:bg-emerald-900/40'
                   : 'bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100 shadow-2xs'
               }`}
               title="Panduan Pakai Tanpa Hosting, Script Runner Lokal, dan Akses HP"
             >
-              <HardDrive className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-              <span className="hidden sm:inline">Pakai Tanpa Hosting</span>
-              <span className="sm:hidden">Tanpa Host</span>
+              <HardDrive className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Tanpa Hosting</span>
             </button>
+
             {/* Dark/Light Mode Switcher */}
             <button
               onClick={handleToggleDark}
@@ -788,6 +1222,7 @@ export default function App() {
             >
               {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </button>
+
             {/* Low Stock Alert Bell Button */}
             <button
               onClick={() => setIsLowStockModalOpen(true)}
@@ -807,6 +1242,7 @@ export default function App() {
                 </span>
               )}
             </button>
+
             {/* Google Sheets Live Sync Status & Trigger */}
             <button
               onClick={() => handleSyncPendingTransactions(false)}
@@ -826,7 +1262,7 @@ export default function App() {
                 pendingSyncCount > 0
                   ? `${pendingSyncCount} transaksi menunggu sinkronisasi ke Google Sheets. Klik untuk sinkronkan!`
                   : isSheetsConnected
-                  ? 'Klik untuk Sinkronisasi 2 Arah Dashboard & Google Sheets (termasuk jika transaksi sudah 0)'
+                  ? 'Klik untuk Sinkronisasi 2 Arah Dashboard & Google Sheets'
                   : 'Klik untuk menghubungkan Google Sheets'
               }
             >
@@ -847,6 +1283,7 @@ export default function App() {
                   : 'Hubungkan Sheets'}
               </span>
             </button>
+
             {/* Quick PIN Security button */}
             <button
               onClick={() => setIsChangePinModalOpen(true)}
@@ -860,6 +1297,7 @@ export default function App() {
               <Key className="w-3.5 h-3.5 text-emerald-400" />
               <span className="hidden md:inline">Ganti PIN</span>
             </button>
+
             {/* Logout Button */}
             <button
               onClick={handleLogout}
@@ -899,6 +1337,7 @@ export default function App() {
               storeProfile={storeProfile}
               userRole={currentUser.role}
               onNavigateToPOS={() => setActiveTab('pos')}
+              onNavigateToInventory={() => setActiveTab('inventory')}
               onNavigateToSheets={() => setActiveTab('sheets')}
               onOpenLowStock={() => setIsLowStockModalOpen(true)}
               onSelectReceipt={(tx) => setReceiptModalTx(tx)}
@@ -908,6 +1347,8 @@ export default function App() {
                 exportDailyReportPDF(today, todayTxs, storeProfile);
               }}
               isSheetsConnected={isSheetsConnected}
+              isCloudSynced={isCloudSynced}
+              onConnectCloud={handleConnectCloud}
               lastSyncedAt={sheetsConfig.lastSyncedAt}
               pendingSyncCount={pendingSyncCount}
               onSyncPending={() => handleSyncPendingTransactions(false)}
@@ -976,16 +1417,25 @@ export default function App() {
               transactions={transactions}
               storeProfile={storeProfile}
               config={sheetsConfig}
-              onUpdateConfig={(cfg) => setSheetsConfig(cfg)}
+              onUpdateConfig={handleUpdateSheetsConfig}
               onImportProducts={(imported) => {
                 setProducts(imported);
                 saveStoredProducts(imported);
+                const ws = cloudWorkspaceRef.current;
+                const fbUser = firebaseUserRef.current;
+                if (ws && fbUser) {
+                  void runCloudTask(syncImportedProductsToCloud(ws, fbUser, imported));
+                }
               }}
               onImportTransactions={(importedTxs) => {
                 setTransactions(importedTxs);
                 saveStoredTransactions(importedTxs);
+                const ws = cloudWorkspaceRef.current;
+                const fbUser = firebaseUserRef.current;
+                if (ws && fbUser) {
+                  void runCloudTask(syncImportedTransactionsToCloud(ws, fbUser, importedTxs));
+                }
               }}
-              onZeroAllTransactions={handleZeroAllTransactions}
               pendingSyncCount={pendingSyncCount}
               onSyncPending={() => handleSyncPendingTransactions(false)}
               isSyncingPending={isSyncingToSheets}
@@ -1000,7 +1450,7 @@ export default function App() {
               onAddUser={handleAddUser}
               onUpdateUser={handleUpdateUser}
               onDeleteUser={handleDeleteUser}
-              onClearDemoUsers={handleClearDemoUsers}
+              isCloudSynced={isCloudSynced}
               isDark={isDark}
             />
           )}
@@ -1008,9 +1458,9 @@ export default function App() {
           {effectiveTab === 'settings' && currentUser.role === 'admin' && (
             <StoreSettings
               storeProfile={storeProfile}
-              onSaveProfile={(prof) => setStoreProfile(prof)}
-              onResetDemoData={handleResetDemoData}
-              onOpenZeroTransactions={() => setSheetsSyncModalMode('confirm-zero')}
+              onSaveProfile={handleSaveProfile}
+              isCloudSynced={isCloudSynced}
+              onConnectCloud={handleConnectCloud}
               isDark={isDark}
             />
           )}
@@ -1054,7 +1504,7 @@ export default function App() {
         />
       )}
 
-      {/* 2-Way Dashboard <-> Google Sheets Sync & Zero-Out Modal */}
+      {/* 2-Way Dashboard <-> Google Sheets Sync Modal */}
       <SheetsSyncModal
         isOpen={sheetsSyncModalMode !== null}
         initialMode={sheetsSyncModalMode || 'hub'}
@@ -1068,7 +1518,6 @@ export default function App() {
         isBusy={isSyncingToSheets}
         onPushFullToSheet={handlePushFullToSheet}
         onPullFullFromSheet={handlePullFullFromSheet}
-        onZeroTransactions={handleZeroAllTransactions}
         onOpenSheetsMenu={() => setActiveTab('sheets')}
         isDark={isDark}
       />
@@ -1082,5 +1531,13 @@ export default function App() {
         syncMessage={syncToastMessage}
       />
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AppErrorBoundary>
+      <AppContent />
+    </AppErrorBoundary>
   );
 }

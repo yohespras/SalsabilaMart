@@ -296,67 +296,102 @@ export const StorePublicProfile: React.FC<StorePublicProfileProps> = ({
         </div>
 
         {/* Products Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-          {filteredProducts.map((p) => {
-            const isOutOfStock = p.stock <= 0;
-            return (
-              <div
-                key={p.id}
-                className={`p-4 rounded-2xl border flex flex-col justify-between text-left transition-all ${
-                  isDark
-                    ? 'bg-slate-900/80 border-slate-800 hover:border-slate-700 shadow-sm'
-                    : 'bg-white border-slate-200/80 hover:border-slate-300 shadow-2xs hover:shadow-md'
-                }`}
+        {products.length === 0 ? (
+          <div
+            className={`p-10 rounded-3xl border text-center space-y-3 ${
+              isDark ? 'bg-slate-900/70 border-slate-800' : 'bg-white border-slate-200/80 shadow-2xs'
+            }`}
+          >
+            <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 text-emerald-500 flex items-center justify-center mx-auto">
+              <Barcode className="w-6 h-6" />
+            </div>
+            <h3 className={`font-black text-sm sm:text-base ${isDark ? 'text-white' : 'text-slate-900'}`}>
+              Katalog Produk Belum Diinput
+            </h3>
+            <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
+              Aplikasi siap digunakan dari awal (0 data). Silakan masuk ke sistem kasir untuk mulai menginput barang menggunakan mesin scanner barcode atau form inventaris.
+            </p>
+            <div className="pt-1">
+              <button
+                onClick={onOpenLogin}
+                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-2xl inline-flex items-center gap-2 cursor-pointer shadow-md"
               >
-                <div>
-                  <div className="flex items-center justify-between text-[10px] text-slate-400">
-                    <span className="font-mono text-emerald-500 font-semibold">{p.barcode}</span>
-                    <span
-                      className={`px-1.5 py-0.5 rounded text-[9px] font-medium uppercase ${
-                        isDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600'
-                      }`}
-                    >
-                      {p.category}
-                    </span>
-                  </div>
-                  <h3
-                    className={`font-bold text-xs mt-2 line-clamp-2 leading-snug ${
-                      isDark ? 'text-white' : 'text-slate-900'
-                    }`}
-                  >
-                    {p.name}
-                  </h3>
-                </div>
+                <LogIn className="w-4 h-4" />
+                <span>Masuk &amp; Mulai Input Barang</span>
+              </button>
+            </div>
+          </div>
+        ) : filteredProducts.length === 0 ? (
+          <div
+            className={`p-8 rounded-3xl border text-center text-xs text-slate-400 ${
+              isDark ? 'bg-slate-900/70 border-slate-800' : 'bg-white border-slate-200/80'
+            }`}
+          >
+            Tidak ada produk yang cocok dengan pencarian &quot;{searchQuery}&quot;.
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            {filteredProducts.map((p) => {
+              const isOutOfStock = p.stock <= 0;
+              return (
                 <div
-                  className={`mt-4 pt-2.5 border-t flex items-center justify-between ${
-                    isDark ? 'border-slate-800' : 'border-slate-100'
+                  key={p.id}
+                  className={`p-4 rounded-2xl border flex flex-col justify-between text-left transition-all ${
+                    isDark
+                      ? 'bg-slate-900/80 border-slate-800 hover:border-slate-700 shadow-sm'
+                      : 'bg-white border-slate-200/80 hover:border-slate-300 shadow-2xs hover:shadow-md'
                   }`}
                 >
                   <div>
-                    <div
-                      className={`text-sm font-black font-mono tracking-tight ${
+                    <div className="flex items-center justify-between text-[10px] text-slate-400">
+                      <span className="font-mono text-emerald-500 font-semibold">{p.barcode}</span>
+                      <span
+                        className={`px-1.5 py-0.5 rounded text-[9px] font-medium uppercase ${
+                          isDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600'
+                        }`}
+                      >
+                        {p.category}
+                      </span>
+                    </div>
+                    <h3
+                      className={`font-bold text-xs mt-2 line-clamp-2 leading-snug ${
                         isDark ? 'text-white' : 'text-slate-900'
                       }`}
                     >
-                      {formatRupiah(p.price)}
-                    </div>
-                    <div className="text-[10px] text-slate-400 mt-0.5">
-                      Stok:{' '}
-                      <span className={isOutOfStock ? 'text-rose-500 font-bold' : 'font-semibold'}>
-                        {isOutOfStock ? 'Habis' : `${p.stock} ${p.unit}`}
-                      </span>
-                    </div>
+                      {p.name}
+                    </h3>
                   </div>
                   <div
-                    className={`w-2 h-2 rounded-full ${
-                      isOutOfStock ? 'bg-rose-500' : 'bg-emerald-500'
+                    className={`mt-4 pt-2.5 border-t flex items-center justify-between ${
+                      isDark ? 'border-slate-800' : 'border-slate-100'
                     }`}
-                  />
+                  >
+                    <div>
+                      <div
+                        className={`text-sm font-black font-mono tracking-tight ${
+                          isDark ? 'text-white' : 'text-slate-900'
+                        }`}
+                      >
+                        {formatRupiah(p.price)}
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-0.5">
+                        Stok:{' '}
+                        <span className={isOutOfStock ? 'text-rose-500 font-bold' : 'font-semibold'}>
+                          {isOutOfStock ? 'Habis' : `${p.stock} ${p.unit}`}
+                        </span>
+                      </div>
+                    </div>
+                    <div
+                      className={`w-2 h-2 rounded-full ${
+                        isOutOfStock ? 'bg-rose-500' : 'bg-emerald-500'
+                      }`}
+                    />
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </main>
 
       {/* Footer */}

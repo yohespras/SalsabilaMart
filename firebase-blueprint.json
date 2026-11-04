@@ -1,92 +1,215 @@
 {
   "entities": {
-    "product": {
-      "title": "Product",
-      "description": "Katalog produk dan stok barang Salsabila Mart",
+    "adminRecord": {
+      "title": "AdminRecord",
+      "description": "Dokumen penanda hak akses administrator terverifikasi",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "barcode": { "type": "string" },
-        "name": { "type": "string" },
-        "category": { "type": "string" },
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "minLength": 3, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "createdAt"]
+    },
+    "storeSetting": {
+      "title": "StoreSetting",
+      "description": "Pengaturan identitas toko dan konfigurasi sinkronisasi Google Sheets lintas perangkat",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "tagline": { "type": "string", "maxLength": 200 },
+        "address": { "type": "string", "maxLength": 300 },
+        "phone": { "type": "string", "maxLength": 40 },
+        "email": { "type": "string", "maxLength": 128 },
+        "operatingHours": { "type": "string", "maxLength": 100 },
+        "qrisNmid": { "type": "string", "maxLength": 100 },
+        "receiptHeader": { "type": "string", "maxLength": 300 },
+        "receiptFooter": { "type": "string", "maxLength": 500 },
+        "paperSize": { "type": "string", "enum": ["58mm", "80mm"] },
+        "spreadsheetId": { "type": "string", "maxLength": 128 },
+        "spreadsheetName": { "type": "string", "maxLength": 200 },
+        "spreadsheetUrl": { "type": "string", "maxLength": 500 },
+        "syncMode": { "type": "string", "enum": ["oauth", "webhook"] },
+        "webhookUrl": { "type": "string", "maxLength": 500 },
+        "autoSync": { "type": "boolean" },
+        "sheetsStatus": { "type": "string", "enum": ["disconnected", "connecting", "connected", "error"] },
+        "originalOwnerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "authorUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "allowedEmails": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "id",
+        "name",
+        "tagline",
+        "address",
+        "phone",
+        "email",
+        "operatingHours",
+        "qrisNmid",
+        "receiptHeader",
+        "receiptFooter",
+        "paperSize",
+        "spreadsheetId",
+        "spreadsheetName",
+        "spreadsheetUrl",
+        "syncMode",
+        "webhookUrl",
+        "autoSync",
+        "sheetsStatus",
+        "originalOwnerUid",
+        "authorUid",
+        "allowedEmails",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "product": {
+      "title": "Product",
+      "description": "Katalog produk dan stok barang toko real-time lintas perangkat",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "storeId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "barcode": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "category": { "type": "string", "minLength": 1, "maxLength": 100 },
         "price": { "type": "number" },
         "costPrice": { "type": "number" },
         "stock": { "type": "number" },
         "minStock": { "type": "number" },
-        "unit": { "type": "string" },
-        "updatedAt": { "type": "string" }
+        "unit": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "isoUpdatedAt": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "originalOwnerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "authorUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "allowedEmails": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["id", "barcode", "name", "price", "stock"]
+      "required": [
+        "id",
+        "storeId",
+        "barcode",
+        "name",
+        "category",
+        "price",
+        "costPrice",
+        "stock",
+        "minStock",
+        "unit",
+        "isoUpdatedAt",
+        "originalOwnerUid",
+        "authorUid",
+        "allowedEmails",
+        "createdAt",
+        "updatedAt"
+      ]
     },
     "transaction": {
       "title": "Transaction",
-      "description": "Riwayat transaksi penjualan kasir",
+      "description": "Riwayat nota transaksi penjualan kasir real-time lintas perangkat",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "date": { "type": "string" },
-        "cashierName": { "type": "string" },
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "storeId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "txDate": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "cashierName": { "type": "string", "minLength": 1, "maxLength": 120 },
         "cashierRole": { "type": "string", "enum": ["admin", "kasir"] },
+        "items": { "type": "array" },
         "subtotal": { "type": "number" },
         "discount": { "type": "number" },
         "total": { "type": "number" },
         "paymentMethod": { "type": "string", "enum": ["TUNAI", "QRIS"] },
         "amountPaid": { "type": "number" },
         "change": { "type": "number" },
-        "qrisRef": { "type": "string" }
+        "qrisRef": { "type": "string", "maxLength": 120 },
+        "syncedToSheet": { "type": "boolean" },
+        "originalOwnerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "authorUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "allowedEmails": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["id", "date", "cashierName", "total", "paymentMethod"]
+      "required": [
+        "id",
+        "storeId",
+        "txDate",
+        "cashierName",
+        "cashierRole",
+        "items",
+        "subtotal",
+        "discount",
+        "total",
+        "paymentMethod",
+        "amountPaid",
+        "change",
+        "qrisRef",
+        "syncedToSheet",
+        "originalOwnerUid",
+        "authorUid",
+        "allowedEmails",
+        "createdAt",
+        "updatedAt"
+      ]
     },
-    "userProfile": {
-      "title": "UserProfile",
-      "description": "Profil pengguna dan staf kasir toko",
+    "staffProfile": {
+      "title": "StaffProfile",
+      "description": "Profil pengguna staf kasir dan admin toko dengan isolasi PII",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "name": { "type": "string" },
-        "email": { "type": "string" },
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "storeId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "email": { "type": "string", "minLength": 1, "maxLength": 128 },
         "role": { "type": "string", "enum": ["admin", "kasir"] },
-        "phone": { "type": "string" },
+        "pinCode": { "type": "string", "maxLength": 64 },
+        "phone": { "type": "string", "maxLength": 40 },
         "isActive": { "type": "boolean" },
-        "transactionsServed": { "type": "number" }
+        "transactionsServed": { "type": "number" },
+        "originalOwnerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "authorUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["id", "name", "email", "role"]
-    },
-    "storeProfile": {
-      "title": "StoreProfile",
-      "description": "Pengaturan identitas toko",
-      "type": "object",
-      "properties": {
-        "name": { "type": "string" },
-        "tagline": { "type": "string" },
-        "address": { "type": "string" },
-        "phone": { "type": "string" },
-        "email": { "type": "string" },
-        "operatingHours": { "type": "string" },
-        "qrisNmid": { "type": "string" },
-        "receiptHeader": { "type": "string" },
-        "receiptFooter": { "type": "string" },
-        "paperSize": { "type": "string", "enum": ["58mm", "80mm"] }
-      },
-      "required": ["name", "address", "phone"]
+      "required": [
+        "id",
+        "storeId",
+        "name",
+        "email",
+        "role",
+        "pinCode",
+        "phone",
+        "isActive",
+        "transactionsServed",
+        "originalOwnerUid",
+        "authorUid",
+        "createdAt",
+        "updatedAt"
+      ]
     }
   },
   "firestore": {
+    "/admins/{adminUid}": {
+      "schema": { "$ref": "#/entities/adminRecord" },
+      "description": "Daftar UID administrator terpercaya"
+    },
+    "/store_settings/{settingId}": {
+      "schema": { "$ref": "#/entities/storeSetting" },
+      "description": "Pengaturan toko dan integrasi Google Sheets lintas perangkat"
+    },
     "/products/{productId}": {
       "schema": { "$ref": "#/entities/product" },
-      "description": "Daftar produk inventaris"
+      "description": "Daftar produk dan stok inventaris sinkron lintas perangkat"
     },
     "/transactions/{transactionId}": {
       "schema": { "$ref": "#/entities/transaction" },
-      "description": "Daftar nota transaksi penjualan"
+      "description": "Daftar nota penjualan kasir sinkron lintas perangkat"
     },
-    "/users/{userId}": {
-      "schema": { "$ref": "#/entities/userProfile" },
-      "description": "Akun admin dan staf kasir"
-    },
-    "/store/profile": {
-      "schema": { "$ref": "#/entities/storeProfile" },
-      "description": "Konfigurasi profil toko"
+    "/staff_profiles/{staffId}": {
+      "schema": { "$ref": "#/entities/staffProfile" },
+      "description": "Akun admin dan kasir toko terisolasi"
     }
   }
 }

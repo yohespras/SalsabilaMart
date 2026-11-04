@@ -1,49 +1,457 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Default-deny catch-all
+    // 1. Global Safety Net: Default-deny catch-all
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // Helper functions
+    // Primitive Helpers
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
     function isSignedIn() {
       return request.auth != null;
     }
 
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
+    function isVerifiedUser() {
+      return isSignedIn()
+        && request.auth.token.email_verified == true
+        && request.auth.token.email is string
+        && request.auth.token.email.size() >= 3
+        && request.auth.token.email.size() <= 128;
     }
 
-    // Connection validation document
+    function isBootstrappedAdmin() {
+      return isVerifiedUser() && request.auth.token.email == 'salsabilamart684@gmail.com';
+    }
+
+    function isAdmin() {
+      return isBootstrappedAdmin()
+        || (isVerifiedUser() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+
+    function isValidAllowedEmails(emails) {
+      return emails is list
+        && emails.size() >= 1
+        && emails.size() <= 20
+        && emails[0] is string
+        && emails[0].size() >= 3
+        && emails[0].size() <= 128;
+    }
+
+    function isStoreOwner(storeId) {
+      return exists(/databases/$(database)/documents/store_settings/$(storeId))
+        && get(/databases/$(database)/documents/store_settings/$(storeId)).data.originalOwnerUid == request.auth.uid;
+    }
+
+    function isStoreMember(storeId) {
+      return exists(/databases/$(database)/documents/store_settings/$(storeId))
+        && (
+          get(/databases/$(database)/documents/store_settings/$(storeId)).data.originalOwnerUid == request.auth.uid
+          || request.auth.token.email in get(/databases/$(database)/documents/store_settings/$(storeId)).data.allowedEmails
+        );
+    }
+
+    // Validation Blueprints
+    function isValidAdminRecord(data) {
+      return data.keys().hasAll(['uid', 'email', 'createdAt'])
+        && data.keys().hasOnly(['uid', 'email', 'createdAt'])
+        && isValidId(data.uid)
+        && data.uid == request.auth.uid
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 128
+        && data.createdAt is timestamp;
+    }
+
+    function isValidStoreSetting(data) {
+      return data.keys().hasAll([
+          'id', 'name', 'tagline', 'address', 'phone', 'email',
+          'operatingHours', 'qrisNmid', 'receiptHeader', 'receiptFooter', 'paperSize',
+          'spreadsheetId', 'spreadsheetName', 'spreadsheetUrl', 'syncMode', 'webhookUrl',
+          'autoSync', 'sheetsStatus', 'originalOwnerUid', 'authorUid', 'allowedEmails',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'name', 'tagline', 'address', 'phone', 'email',
+          'operatingHours', 'qrisNmid', 'receiptHeader', 'receiptFooter', 'paperSize',
+          'spreadsheetId', 'spreadsheetName', 'spreadsheetUrl', 'syncMode', 'webhookUrl',
+          'autoSync', 'sheetsStatus', 'originalOwnerUid', 'authorUid', 'allowedEmails',
+          'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.id)
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 120
+        && data.tagline is string && data.tagline.size() <= 200
+        && data.address is string && data.address.size() <= 300
+        && data.phone is string && data.phone.size() <= 40
+        && data.email is string && data.email.size() <= 128
+        && data.operatingHours is string && data.operatingHours.size() <= 100
+        && data.qrisNmid is string && data.qrisNmid.size() <= 100
+        && data.receiptHeader is string && data.receiptHeader.size() <= 300
+        && data.receiptFooter is string && data.receiptFooter.size() <= 500
+        && (data.paperSize == '58mm' || data.paperSize == '80mm')
+        && data.spreadsheetId is string && data.spreadsheetId.size() <= 128
+        && data.spreadsheetName is string && data.spreadsheetName.size() <= 200
+        && data.spreadsheetUrl is string && data.spreadsheetUrl.size() <= 500
+        && (data.syncMode == 'oauth' || data.syncMode == 'webhook')
+        && data.webhookUrl is string && data.webhookUrl.size() <= 500
+        && data.autoSync is bool
+        && (data.sheetsStatus == 'disconnected' || data.sheetsStatus == 'connecting' || data.sheetsStatus == 'connected' || data.sheetsStatus == 'error')
+        && isValidId(data.originalOwnerUid)
+        && isValidId(data.authorUid)
+        && data.authorUid == request.auth.uid
+        && isValidAllowedEmails(data.allowedEmails)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidProduct(data) {
+      return data.keys().hasAll([
+          'id', 'storeId', 'barcode', 'name', 'category',
+          'price', 'costPrice', 'stock', 'minStock', 'unit', 'isoUpdatedAt',
+          'originalOwnerUid', 'authorUid', 'allowedEmails', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'storeId', 'barcode', 'name', 'category',
+          'price', 'costPrice', 'stock', 'minStock', 'unit', 'isoUpdatedAt',
+          'originalOwnerUid', 'authorUid', 'allowedEmails', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.id)
+        && isValidId(data.storeId)
+        && data.barcode is string && data.barcode.size() >= 1 && data.barcode.size() <= 64
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 200
+        && data.category is string && data.category.size() >= 1 && data.category.size() <= 100
+        && (data.price is int || data.price is float) && data.price >= 0 && data.price <= 1000000000
+        && (data.costPrice is int || data.costPrice is float) && data.costPrice >= 0 && data.costPrice <= 1000000000
+        && (data.stock is int || data.stock is float) && data.stock >= 0 && data.stock <= 1000000
+        && (data.minStock is int || data.minStock is float) && data.minStock >= 0 && data.minStock <= 1000000
+        && data.unit is string && data.unit.size() >= 1 && data.unit.size() <= 32
+        && data.isoUpdatedAt is string && data.isoUpdatedAt.size() >= 1 && data.isoUpdatedAt.size() <= 64
+        && isValidId(data.originalOwnerUid)
+        && isValidId(data.authorUid)
+        && data.authorUid == request.auth.uid
+        && isValidAllowedEmails(data.allowedEmails)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidTransactionItems(items) {
+      return items is list
+        && items.size() <= 100
+        && (
+          items.size() == 0
+          || (
+            items[0] is map
+            && items[0].keys().hasAll(['productId', 'barcode', 'name', 'price', 'costPrice', 'quantity', 'subtotal'])
+            && items[0].keys().hasOnly(['productId', 'barcode', 'name', 'price', 'costPrice', 'quantity', 'subtotal'])
+            && items[0].productId is string && items[0].productId.size() >= 1 && items[0].productId.size() <= 128
+            && items[0].barcode is string && items[0].barcode.size() <= 64
+            && items[0].name is string && items[0].name.size() >= 1 && items[0].name.size() <= 200
+            && (items[0].price is int || items[0].price is float) && items[0].price >= 0
+            && (items[0].costPrice is int || items[0].costPrice is float) && items[0].costPrice >= 0
+            && (items[0].quantity is int || items[0].quantity is float) && items[0].quantity >= 1
+            && (items[0].subtotal is int || items[0].subtotal is float) && items[0].subtotal >= 0
+          )
+        );
+    }
+
+    function isValidTransaction(data) {
+      return data.keys().hasAll([
+          'id', 'storeId', 'txDate', 'cashierName', 'cashierRole',
+          'items', 'subtotal', 'discount', 'total', 'paymentMethod',
+          'amountPaid', 'change', 'qrisRef', 'syncedToSheet',
+          'originalOwnerUid', 'authorUid', 'allowedEmails', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'storeId', 'txDate', 'cashierName', 'cashierRole',
+          'items', 'subtotal', 'discount', 'total', 'paymentMethod',
+          'amountPaid', 'change', 'qrisRef', 'syncedToSheet',
+          'originalOwnerUid', 'authorUid', 'allowedEmails', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.id)
+        && isValidId(data.storeId)
+        && data.txDate is string && data.txDate.size() >= 1 && data.txDate.size() <= 64
+        && data.cashierName is string && data.cashierName.size() >= 1 && data.cashierName.size() <= 120
+        && (data.cashierRole == 'admin' || data.cashierRole == 'kasir')
+        && isValidTransactionItems(data.items)
+        && (data.subtotal is int || data.subtotal is float) && data.subtotal >= 0 && data.subtotal <= 10000000000
+        && (data.discount is int || data.discount is float) && data.discount >= 0 && data.discount <= 10000000000
+        && (data.total is int || data.total is float) && data.total >= 0 && data.total <= 10000000000
+        && (data.paymentMethod == 'TUNAI' || data.paymentMethod == 'QRIS')
+        && (data.amountPaid is int || data.amountPaid is float) && data.amountPaid >= 0 && data.amountPaid <= 10000000000
+        && (data.change is int || data.change is float) && data.change >= 0 && data.change <= 10000000000
+        && data.qrisRef is string && data.qrisRef.size() <= 120
+        && data.syncedToSheet is bool
+        && isValidId(data.originalOwnerUid)
+        && isValidId(data.authorUid)
+        && data.authorUid == request.auth.uid
+        && isValidAllowedEmails(data.allowedEmails)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidStaffProfile(data) {
+      return data.keys().hasAll([
+          'id', 'storeId', 'name', 'email', 'role',
+          'pinCode', 'phone', 'isActive', 'transactionsServed',
+          'originalOwnerUid', 'authorUid', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'storeId', 'name', 'email', 'role',
+          'pinCode', 'phone', 'isActive', 'transactionsServed',
+          'originalOwnerUid', 'authorUid', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.id)
+        && isValidId(data.storeId)
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 120
+        && data.email is string && data.email.size() >= 1 && data.email.size() <= 128
+        && (data.role == 'admin' || data.role == 'kasir')
+        && data.pinCode is string && data.pinCode.size() <= 64
+        && data.phone is string && data.phone.size() <= 40
+        && data.isActive is bool
+        && (data.transactionsServed is int || data.transactionsServed is float) && data.transactionsServed >= 0 && data.transactionsServed <= 10000000
+        && isValidId(data.originalOwnerUid)
+        && isValidId(data.authorUid)
+        && data.authorUid == request.auth.uid
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // Boot connectivity check document
     match /test/{docId} {
-      allow read: if true;
-      allow write: if isSignedIn();
+      allow get: if isValidId(docId) && docId == 'connection';
+      allow list, write: if false;
     }
 
-    // Products collection: allow read for POS & store catalog; allow write for signed-in staff
+    // Trusted Admin Registry
+    match /admins/{adminUid} {
+      allow get: if isVerifiedUser() && isValidId(adminUid) && (request.auth.uid == adminUid || isBootstrappedAdmin());
+      allow list: if false;
+      allow create: if isBootstrappedAdmin()
+        && isValidId(adminUid)
+        && isValidAdminRecord(incoming())
+        && incoming().uid == adminUid
+        && incoming().createdAt == request.time;
+      allow update, delete: if false;
+    }
+
+    // Store Settings & Google Sheets Configuration
+    match /store_settings/{settingId} {
+      allow get: if isVerifiedUser()
+        && isValidId(settingId)
+        && (
+          isAdmin()
+          || existing().originalOwnerUid == request.auth.uid
+          || request.auth.token.email in existing().allowedEmails
+        );
+
+      allow list: if isVerifiedUser()
+        && (
+          existing().originalOwnerUid == request.auth.uid
+          || request.auth.token.email in existing().allowedEmails
+        );
+
+      allow create: if isVerifiedUser()
+        && isValidId(settingId)
+        && isValidStoreSetting(incoming())
+        && incoming().id == settingId
+        && incoming().originalOwnerUid == request.auth.uid
+        && request.auth.token.email in incoming().allowedEmails
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isVerifiedUser()
+        && isValidId(settingId)
+        && isValidStoreSetting(incoming())
+        && incoming().id == existing().id
+        && incoming().originalOwnerUid == existing().originalOwnerUid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin()
+          || (
+            existing().originalOwnerUid == request.auth.uid
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'name', 'tagline', 'address', 'phone', 'email',
+              'operatingHours', 'qrisNmid', 'receiptHeader', 'receiptFooter', 'paperSize',
+              'spreadsheetId', 'spreadsheetName', 'spreadsheetUrl', 'syncMode', 'webhookUrl',
+              'autoSync', 'sheetsStatus', 'authorUid', 'allowedEmails', 'updatedAt'
+            ])
+          )
+        );
+
+      allow delete: if false;
+    }
+
+    // Store Products Inventory
     match /products/{productId} {
-      allow read: if true;
-      allow write: if isSignedIn();
+      allow get: if isVerifiedUser()
+        && isValidId(productId)
+        && (
+          isAdmin()
+          || existing().originalOwnerUid == request.auth.uid
+          || request.auth.token.email in existing().allowedEmails
+        );
+
+      allow list: if isVerifiedUser()
+        && (
+          existing().originalOwnerUid == request.auth.uid
+          || request.auth.token.email in existing().allowedEmails
+        );
+
+      allow create: if isVerifiedUser()
+        && isValidId(productId)
+        && isValidProduct(incoming())
+        && incoming().id == productId
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && (isAdmin() || isStoreMember(incoming().storeId));
+
+      allow update: if isVerifiedUser()
+        && isValidId(productId)
+        && isValidProduct(incoming())
+        && incoming().id == existing().id
+        && incoming().storeId == existing().storeId
+        && incoming().originalOwnerUid == existing().originalOwnerUid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin()
+          || (
+            // Action 1: Owner/Admin full product edit
+            existing().originalOwnerUid == request.auth.uid
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'barcode', 'name', 'category', 'price', 'costPrice',
+              'stock', 'minStock', 'unit', 'isoUpdatedAt', 'authorUid',
+              'allowedEmails', 'updatedAt'
+            ])
+          )
+          || (
+            // Action 2: Cashier stock deduction / restock
+            request.auth.token.email in existing().allowedEmails
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'stock', 'isoUpdatedAt', 'authorUid', 'updatedAt'
+            ])
+          )
+        );
+
+      allow delete: if isVerifiedUser()
+        && isValidId(productId)
+        && (isAdmin() || existing().originalOwnerUid == request.auth.uid);
     }
 
-    // Transactions collection: allow read and create for signed-in staff
+    // POS Sales Transactions
     match /transactions/{transactionId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update, delete: if isSignedIn();
+      allow get: if isVerifiedUser()
+        && isValidId(transactionId)
+        && (
+          isAdmin()
+          || existing().originalOwnerUid == request.auth.uid
+          || request.auth.token.email in existing().allowedEmails
+        );
+
+      allow list: if isVerifiedUser()
+        && (
+          existing().originalOwnerUid == request.auth.uid
+          || request.auth.token.email in existing().allowedEmails
+        );
+
+      allow create: if isVerifiedUser()
+        && isValidId(transactionId)
+        && isValidTransaction(incoming())
+        && incoming().id == transactionId
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && (isAdmin() || isStoreMember(incoming().storeId));
+
+      allow update: if isVerifiedUser()
+        && isValidId(transactionId)
+        && isValidTransaction(incoming())
+        && incoming().id == existing().id
+        && incoming().storeId == existing().storeId
+        && incoming().originalOwnerUid == existing().originalOwnerUid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin()
+          || (
+            // Action: Mark syncedToSheet or update allowedEmails
+            (existing().originalOwnerUid == request.auth.uid || request.auth.token.email in existing().allowedEmails)
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'syncedToSheet', 'authorUid', 'allowedEmails', 'updatedAt'
+            ])
+          )
+        );
+
+      allow delete: if isVerifiedUser()
+        && isValidId(transactionId)
+        && (isAdmin() || existing().originalOwnerUid == request.auth.uid);
     }
 
-    // User profiles: allow read for users; allow write for owner or signed-in users
-    match /users/{userId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn() && (isOwner(userId) || request.auth.uid != null);
-    }
+    // Staff Profiles (PII Isolated: email, phone, pinCode)
+    match /staff_profiles/{staffId} {
+      allow get: if isVerifiedUser()
+        && isValidId(staffId)
+        && (
+          isAdmin()
+          || existing().originalOwnerUid == request.auth.uid
+          || existing().email == request.auth.token.email
+        );
 
-    // Store settings
-    match /store/{docId} {
-      allow read: if true;
-      allow write: if isSignedIn();
+      allow list: if isVerifiedUser()
+        && (
+          existing().originalOwnerUid == request.auth.uid
+          || existing().email == request.auth.token.email
+        );
+
+      allow create: if isVerifiedUser()
+        && isValidId(staffId)
+        && isValidStaffProfile(incoming())
+        && incoming().id == staffId
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && (isAdmin() || isStoreOwner(incoming().storeId));
+
+      allow update: if isVerifiedUser()
+        && isValidId(staffId)
+        && isValidStaffProfile(incoming())
+        && incoming().id == existing().id
+        && incoming().storeId == existing().storeId
+        && incoming().originalOwnerUid == existing().originalOwnerUid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin()
+          || (
+            // Action 1: Store Owner manages staff profile
+            existing().originalOwnerUid == request.auth.uid
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'name', 'email', 'role', 'pinCode', 'phone',
+              'isActive', 'transactionsServed', 'authorUid', 'updatedAt'
+            ])
+          )
+          || (
+            // Action 2: Staff member updates own PIN or transactionsServed (cannot change role!)
+            existing().email == request.auth.token.email
+            && incoming().role == existing().role
+            && incoming().isActive == existing().isActive
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'pinCode', 'transactionsServed', 'authorUid', 'updatedAt'
+            ])
+          )
+        );
+
+      allow delete: if isVerifiedUser()
+        && isValidId(staffId)
+        && (isAdmin() || existing().originalOwnerUid == request.auth.uid);
     }
   }
 }

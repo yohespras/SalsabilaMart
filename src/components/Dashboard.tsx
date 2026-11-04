@@ -5,7 +5,6 @@ import {
   Boxes,
   AlertTriangle,
   TrendingUp,
-  CreditCard,
   QrCode,
   Printer,
   ChevronRight,
@@ -16,7 +15,7 @@ import {
   RefreshCw,
   UploadCloud,
   DownloadCloud,
-  Trash2,
+  Cloud,
 } from 'lucide-react';
 import { Product, StoreProfile, Transaction, UserRole } from '../types';
 import { formatRupiah, getLocalDateString } from '../services/storage';
@@ -28,11 +27,14 @@ interface DashboardProps {
   storeProfile: StoreProfile;
   userRole: UserRole;
   onNavigateToPOS: () => void;
+  onNavigateToInventory?: () => void;
   onNavigateToSheets?: () => void;
   onOpenLowStock: () => void;
   onSelectReceipt: (tx: Transaction) => void;
   onExportPDF: () => void;
   isSheetsConnected: boolean;
+  isCloudSynced?: boolean;
+  onConnectCloud?: () => void;
   lastSyncedAt?: string;
   pendingSyncCount?: number;
   onSyncPending?: () => void;
@@ -47,11 +49,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
   storeProfile,
   userRole,
   onNavigateToPOS,
+  onNavigateToInventory,
   onNavigateToSheets,
   onOpenLowStock,
   onSelectReceipt,
   onExportPDF,
   isSheetsConnected,
+  isCloudSynced = false,
+  onConnectCloud,
   lastSyncedAt,
   pendingSyncCount = 0,
   onSyncPending,
@@ -104,11 +109,25 @@ export const Dashboard: React.FC<DashboardProps> = ({
       <div className="relative rounded-3xl p-6 sm:p-8 bg-gradient-to-r from-emerald-950 via-slate-900 to-teal-950 text-white shadow-xl overflow-hidden border border-emerald-900/40">
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2">
-            <div className="flex items-center gap-2 text-xs font-semibold">
+            <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
               <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] tracking-wide uppercase font-black">
                 {isAdmin ? 'Pusat Kontrol Eksekutif' : 'Shift Kasir Aktif'}
               </span>
-              <span className="text-slate-500">•</span>
+              <span
+                className={`px-2.5 py-0.5 rounded-full text-[10px] tracking-wide font-bold flex items-center gap-1 border ${
+                  isCloudSynced
+                    ? 'bg-teal-500/20 text-teal-200 border-teal-400/30'
+                    : 'bg-amber-500/20 text-amber-200 border-amber-400/30'
+                }`}
+              >
+                <Cloud className="w-3 h-3" />
+                <span>
+                  {isCloudSynced
+                    ? 'Sinkron Multi-Perangkat Aktif'
+                    : 'Mode Lokal Perangkat Ini'}
+                </span>
+              </span>
+              <span className="text-slate-500 hidden sm:inline">•</span>
               <span className="text-slate-300 flex items-center gap-1.5 font-medium">
                 <Calendar className="w-3.5 h-3.5 text-emerald-400" />
                 {new Date().toLocaleDateString('id-ID', {
@@ -123,17 +142,37 @@ export const Dashboard: React.FC<DashboardProps> = ({
               {storeProfile.name}
             </h1>
             <p className="text-xs sm:text-sm text-slate-300 max-w-xl leading-relaxed">
-              Pantauan performa penjualan, ketersediaan inventaris otomatis, dan sinkronisasi data real-time Google Sheets.
+              Pantauan performa penjualan, ketersediaan inventaris otomatis, serta sinkronisasi data real-time lintas perangkat &amp; Google Sheets.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <button
-              onClick={onNavigateToPOS}
-              className="px-5 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 active:scale-95 text-slate-950 font-black text-xs rounded-2xl shadow-lg shadow-emerald-500/25 transition-all flex items-center gap-2 cursor-pointer transform hover:-translate-y-0.5"
-            >
-              <ShoppingCart className="w-4 h-4 text-slate-950" />
-              <span>Buka Mesin Kasir (POS)</span>
-            </button>
+            {products.length === 0 && onNavigateToInventory ? (
+              <button
+                onClick={onNavigateToInventory}
+                className="px-5 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 active:scale-95 text-slate-950 font-black text-xs rounded-2xl shadow-lg shadow-emerald-500/25 transition-all flex items-center gap-2 cursor-pointer transform hover:-translate-y-0.5"
+              >
+                <Boxes className="w-4 h-4 text-slate-950" />
+                <span>Mulai Input Barang (Inventaris)</span>
+              </button>
+            ) : (
+              <button
+                onClick={onNavigateToPOS}
+                className="px-5 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 active:scale-95 text-slate-950 font-black text-xs rounded-2xl shadow-lg shadow-emerald-500/25 transition-all flex items-center gap-2 cursor-pointer transform hover:-translate-y-0.5"
+              >
+                <ShoppingCart className="w-4 h-4 text-slate-950" />
+                <span>Buka Mesin Kasir (POS)</span>
+              </button>
+            )}
+            {!isCloudSynced && onConnectCloud && (
+              <button
+                onClick={onConnectCloud}
+                className="px-4 py-3 bg-blue-500/25 hover:bg-blue-500/35 text-blue-100 font-bold text-xs rounded-2xl border border-blue-400/40 transition-all flex items-center gap-2 cursor-pointer backdrop-blur-xs active:scale-95"
+                title="Hubungkan Akun Google agar data produk & transaksi sama saat login di HP/Laptop lain"
+              >
+                <Cloud className="w-4 h-4 text-blue-300" />
+                <span>Sinkron Perangkat Lain</span>
+              </button>
+            )}
             {isAdmin && onOpenSyncModal && (
               <button
                 onClick={() => onOpenSyncModal('hub')}
@@ -249,7 +288,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               {outOfStockItems.length > 0 ? (
                 <span className="text-rose-500 font-bold">{outOfStockItems.length} barang habis total</span>
               ) : (
-                'Klik untuk restock cepat'
+                `Total ${products.length} produk terdaftar`
               )}
             </p>
           </div>
@@ -296,9 +335,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 {pendingSyncCount > 0
                   ? `${pendingSyncCount} Data Tertunda`
                   : isSheetsConnected
-                  ? transactions.length === 0
-                    ? '0 Transaksi Aktif'
-                    : 'Terhubung Sheets'
+                  ? 'Terhubung Sheets'
+                  : isCloudSynced
+                  ? 'Cloud Aktif'
                   : 'Lokal / Offline'}
               </h3>
             </div>
@@ -312,7 +351,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       minute: '2-digit',
                     })}`
                   : 'Siap sinkron 2 arah (Kirim / Tarik Sheet)'
-                : 'Hubungkan agar Dashboard sinkron ke Sheets'}
+                : 'Hubungkan agar laporan tercatat di Sheets'}
             </p>
             {pendingSyncCount > 0 && onSyncPending ? (
               <div className="mt-2.5 flex items-center gap-1.5">
@@ -341,7 +380,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   onClick={() => onOpenSyncModal('confirm-push')}
                   disabled={isSyncingSheets}
                   className="py-1.5 px-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-[11px] rounded-xl transition-all flex items-center justify-center gap-1 cursor-pointer"
-                  title="Kirim kondisi Dashboard & Transaksi saat ini (termasuk jika 0) ke Google Sheets"
+                  title="Kirim kondisi Dashboard & Transaksi saat ini ke Google Sheets"
                 >
                   <UploadCloud className="w-3.5 h-3.5" />
                   <span>Ke Sheet</span>
@@ -445,7 +484,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <div className="mt-4 space-y-2.5">
             {topProducts.length === 0 ? (
               <p className="text-xs text-slate-400 py-8 text-center italic">
-                Belum ada transaksi penjualan hari ini. Mulai dengan membuat transaksi di Mesin Kasir.
+                Belum ada transaksi penjualan hari ini.
               </p>
             ) : (
               topProducts.map((p, idx) => (
@@ -500,14 +539,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </p>
           </div>
           <div className="flex items-center gap-3">
-            {isAdmin && onOpenSyncModal && (
+            {onNavigateToInventory && products.length === 0 && (
               <button
-                onClick={() => onOpenSyncModal('confirm-zero')}
-                className="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/25 flex items-center gap-1.5 cursor-pointer transition-colors"
-                title="Kosongkan / 0-kan seluruh transaksi di aplikasi dan Google Sheets"
+                onClick={onNavigateToInventory}
+                className="text-xs font-bold text-blue-500 hover:text-blue-400 flex items-center gap-1 cursor-pointer"
               >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>0-kan Transaksi</span>
+                <span>Input Barang</span>
+                <ChevronRight className="w-3.5 h-3.5" />
               </button>
             )}
             <button
@@ -540,13 +578,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
               {transactions.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-10 text-center text-slate-400">
-                    <div className="space-y-2 max-w-md mx-auto">
+                    <div className="space-y-1.5 max-w-md mx-auto">
                       <p className="font-bold text-xs">
-                        Data transaksi saat ini 0 (Kosong / Rp 0).
+                        Belum ada transaksi penjualan tercatat.
                       </p>
                       <p className="text-[11px]">
-                        Jika di Google Sheets masih ada sisa transaksi lama, klik tombol{' '}
-                        <strong>Ke Sheet</strong> atau <strong>Sinkron Spreadsheets</strong> di atas untuk mengosongkan Spreadsheet agar ikut menjadi Rp 0.
+                        {products.length === 0
+                          ? 'Silakan tambahkan daftar barang & stok terlebih dahulu di menu Inventaris / Scan Barcode, lalu mulai melayani transaksi di Mesin Kasir.'
+                          : 'Toko siap digunakan! Buka Mesin Kasir (POS) atau menu Scan Barcode untuk mencatat penjualan pertama.'}
                       </p>
                     </div>
                   </td>

@@ -9,8 +9,7 @@ import {
   Download,
   Upload,
   Terminal,
-  Trash2,
-  AlertTriangle,
+  Cloud,
 } from 'lucide-react';
 import { StoreProfile } from '../types';
 import {
@@ -22,22 +21,25 @@ import {
 interface StoreSettingsProps {
   storeProfile: StoreProfile;
   onSaveProfile: (profile: StoreProfile) => void;
-  onResetDemoData: () => void;
-  onOpenZeroTransactions?: () => void;
+  isCloudSynced?: boolean;
+  onConnectCloud?: () => void;
   isDark?: boolean;
 }
 
 export const StoreSettings: React.FC<StoreSettingsProps> = ({
   storeProfile,
   onSaveProfile,
-  onResetDemoData,
-  onOpenZeroTransactions,
+  isCloudSynced = false,
+  onConnectCloud,
   isDark = false,
 }) => {
   const [formData, setFormData] = useState<StoreProfile>({ ...storeProfile });
   const [isSaved, setIsSaved] = useState(false);
   const [restoreFeedback, setRestoreFeedback] = useState<{ msg: string; ok: boolean } | null>(null);
-  const [showConfirmDemoReset, setShowConfirmDemoReset] = useState(false);
+
+  React.useEffect(() => {
+    setFormData({ ...storeProfile });
+  }, [storeProfile]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,7 +52,7 @@ export const StoreSettings: React.FC<StoreSettingsProps> = ({
     <div className="space-y-6 pb-12 max-w-4xl">
       {/* Header */}
       <div
-        className={`p-6 sm:p-7 rounded-3xl border shadow-sm transition-all ${
+        className={`p-6 sm:p-7 rounded-3xl border shadow-sm transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
           isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200/90'
         }`}
       >
@@ -66,6 +68,23 @@ export const StoreSettings: React.FC<StoreSettingsProps> = ({
               Sesuaikan identitas profil toko, konfigurasi QRIS digital, serta format cetak thermal printer 58mm/80mm.
             </p>
           </div>
+        </div>
+        <div className="shrink-0">
+          {isCloudSynced ? (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-2xl text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+              <Cloud className="w-3.5 h-3.5" />
+              <span>Sinkron Lintas Perangkat Aktif</span>
+            </span>
+          ) : onConnectCloud ? (
+            <button
+              type="button"
+              onClick={onConnectCloud}
+              className="px-3.5 py-2 rounded-2xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white flex items-center gap-1.5 cursor-pointer shadow-xs"
+            >
+              <Cloud className="w-3.5 h-3.5" />
+              <span>Hubungkan Sinkron Multi-Perangkat</span>
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -89,6 +108,7 @@ export const StoreSettings: React.FC<StoreSettingsProps> = ({
               <input
                 type="text"
                 required
+                maxLength={120}
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 className={`w-full px-3.5 py-2 text-xs rounded-xl border focus:outline-hidden ${
@@ -100,6 +120,7 @@ export const StoreSettings: React.FC<StoreSettingsProps> = ({
               <label className="text-xs font-bold block mb-1">Slogan / Tagline</label>
               <input
                 type="text"
+                maxLength={200}
                 value={formData.tagline}
                 onChange={(e) => setFormData({ ...formData, tagline: e.target.value })}
                 className={`w-full px-3.5 py-2 text-xs rounded-xl border focus:outline-hidden ${
@@ -112,6 +133,7 @@ export const StoreSettings: React.FC<StoreSettingsProps> = ({
               <input
                 type="text"
                 required
+                maxLength={300}
                 value={formData.address}
                 onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                 className={`w-full px-3.5 py-2 text-xs rounded-xl border focus:outline-hidden ${
@@ -123,6 +145,7 @@ export const StoreSettings: React.FC<StoreSettingsProps> = ({
               <label className="text-xs font-bold block mb-1">Nomor Telepon / WhatsApp</label>
               <input
                 type="text"
+                maxLength={40}
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                 className={`w-full px-3.5 py-2 text-xs rounded-xl border focus:outline-hidden ${
@@ -134,6 +157,7 @@ export const StoreSettings: React.FC<StoreSettingsProps> = ({
               <label className="text-xs font-bold block mb-1">Jam Operasional</label>
               <input
                 type="text"
+                maxLength={100}
                 value={formData.operatingHours}
                 onChange={(e) => setFormData({ ...formData, operatingHours: e.target.value })}
                 className={`w-full px-3.5 py-2 text-xs rounded-xl border focus:outline-hidden ${
@@ -164,9 +188,10 @@ export const StoreSettings: React.FC<StoreSettingsProps> = ({
               </label>
               <input
                 type="text"
+                maxLength={100}
                 value={formData.qrisNmid || ''}
                 onChange={(e) => setFormData({ ...formData, qrisNmid: e.target.value })}
-                placeholder="ID1020030405060"
+                placeholder="Masukkan NMID QRIS Toko Anda"
                 className={`w-full px-3.5 py-2 text-xs font-mono rounded-xl border focus:outline-hidden ${
                   isDark ? 'bg-slate-850 border-slate-700 text-white' : 'bg-white border-slate-300'
                 }`}
@@ -221,6 +246,7 @@ export const StoreSettings: React.FC<StoreSettingsProps> = ({
               <label className="text-xs font-bold block mb-1">Pesan Header Struk</label>
               <input
                 type="text"
+                maxLength={300}
                 value={formData.receiptHeader}
                 onChange={(e) => setFormData({ ...formData, receiptHeader: e.target.value })}
                 className={`w-full px-3.5 py-2 text-xs rounded-xl border focus:outline-hidden ${
@@ -232,6 +258,7 @@ export const StoreSettings: React.FC<StoreSettingsProps> = ({
               <label className="text-xs font-bold block mb-1">Pesan Footer Struk</label>
               <input
                 type="text"
+                maxLength={500}
                 value={formData.receiptFooter}
                 onChange={(e) => setFormData({ ...formData, receiptFooter: e.target.value })}
                 className={`w-full px-3.5 py-2 text-xs rounded-xl border focus:outline-hidden ${
@@ -242,7 +269,7 @@ export const StoreSettings: React.FC<StoreSettingsProps> = ({
           </div>
         </div>
 
-        {/* Cadangan & Pulihkan Data Lokal (Mode Tanpa Hosting) */}
+        {/* Cadangan & Pulihkan Data Lokal */}
         <div
           className={`p-6 sm:p-7 rounded-3xl border shadow-sm space-y-4 transition-all ${
             isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200/90'
@@ -252,16 +279,16 @@ export const StoreSettings: React.FC<StoreSettingsProps> = ({
             <div className="flex items-center gap-2">
               <HardDrive className="w-4 h-4 text-emerald-500" />
               <h3 className={`font-black text-sm ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                Penyimpanan Lokal & Cadangan Data (Tanpa Hosting)
+                Cadangan Data Lokal & Runner Offline
               </h3>
             </div>
             <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-400 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
-              100% Mandiri
+              Offline + Cloud Ready
             </span>
           </div>
 
           <p className="text-xs text-slate-400 leading-relaxed">
-            Aplikasi ini menyimpan semua produk, harga, riwayat transaksi kasir, dan akun pengguna secara lokal di perangkat komputer/HP ini tanpa mewajibkan hosting berbayar. Anda dapat mengunduh salinan data untuk disimpan di flashdisk atau memindahkannya ke komputer lain.
+            Saat terhubung dengan Akun Google, seluruh data produk, stok, transaksi, dan profil toko otomatis tersinkron ke semua perangkat (HP/Tablet/Laptop). Anda juga dapat mengunduh cadangan file <code>.json</code> untuk arsip offline.
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
@@ -336,26 +363,7 @@ export const StoreSettings: React.FC<StoreSettingsProps> = ({
         </div>
 
         {/* Action Save Bar */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-          <div className="flex flex-wrap items-center gap-3">
-            {onOpenZeroTransactions && (
-              <button
-                type="button"
-                onClick={onOpenZeroTransactions}
-                className="px-3.5 py-2 rounded-xl text-xs bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/30 font-bold flex items-center gap-1.5 cursor-pointer"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>0-kan Transaksi ( Aplikasi &amp; Sheets )</span>
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => setShowConfirmDemoReset(true)}
-              className="text-xs text-slate-400 hover:text-rose-400 font-bold cursor-pointer underline"
-            >
-              Reset ke Data Contoh Awal
-            </button>
-          </div>
+        <div className="flex items-center justify-end pt-2">
           <button
             type="submit"
             className="px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-98 text-white rounded-2xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-emerald-600/30 transition-all cursor-pointer"
@@ -365,47 +373,6 @@ export const StoreSettings: React.FC<StoreSettingsProps> = ({
           </button>
         </div>
       </form>
-
-      {showConfirmDemoReset && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-xs">
-          <div
-            className={`w-full max-w-md rounded-3xl border p-6 shadow-2xl space-y-4 ${
-              isDark ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-900'
-            }`}
-          >
-            <div className="flex items-start gap-3">
-              <div className="p-2.5 rounded-2xl bg-amber-500/15 text-amber-500 shrink-0">
-                <AlertTriangle className="w-5 h-5" />
-              </div>
-              <div className="text-xs space-y-1.5">
-                <h4 className="font-black text-sm">Reset ke Data Contoh Awal?</h4>
-                <p className="text-slate-400 leading-relaxed">
-                  Fitur ini mengembalikan 12 produk contoh beserta 2 transaksi contoh awal. Jika Anda hanya ingin mengosongkan omset &amp; transaksi menjadi <strong>Rp 0</strong>, batalkan ini lalu gunakan tombol <strong>0-kan Transaksi</strong>.
-                </p>
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => setShowConfirmDemoReset(false)}
-                className="px-4 py-2 rounded-xl text-xs font-bold border border-slate-300 dark:border-slate-700 cursor-pointer"
-              >
-                Batal
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowConfirmDemoReset(false);
-                  onResetDemoData();
-                }}
-                className="px-4 py-2 rounded-xl text-xs font-black bg-amber-500 hover:bg-amber-400 text-slate-950 cursor-pointer"
-              >
-                Ya, Reset Data Contoh
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

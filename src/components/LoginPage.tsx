@@ -10,10 +10,10 @@ import {
   EyeOff,
   UserPlus,
   CheckCircle,
-  Trash2,
   Key,
   User,
   Sparkles,
+  Cloud,
 } from 'lucide-react';
 import { StoreProfile, UserProfile, UserRole } from '../types';
 
@@ -21,9 +21,8 @@ interface LoginPageProps {
   storeProfile: StoreProfile;
   users: UserProfile[];
   onLoginSuccess: (user: UserProfile) => void;
-  onRegisterUser: (newUser: Omit<UserProfile, 'id'>, clearDemo?: boolean) => void;
+  onRegisterUser: (newUser: Omit<UserProfile, 'id'>) => void;
   onUpdateUserPin: (userId: string, newPin: string) => void;
-  onClearDemoUsers: () => void;
   onGoogleLogin: () => void;
   onBackToProfile: () => void;
   isLoggingInGoogle: boolean;
@@ -36,7 +35,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   onLoginSuccess,
   onRegisterUser,
   onUpdateUserPin,
-  onClearDemoUsers,
   onGoogleLogin,
   onBackToProfile,
   isLoggingInGoogle,
@@ -56,14 +54,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   const [regRole, setRegRole] = useState<UserRole>('admin');
   const [regPin, setRegPin] = useState('');
   const [regConfirmPin, setRegConfirmPin] = useState('');
-  const [regClearDemo, setRegClearDemo] = useState(true);
 
   // Reset PIN form state
   const [resetSelectedUserId, setResetSelectedUserId] = useState<string>(users[0]?.id || '');
   const [resetNewPin, setResetNewPin] = useState('');
   const [resetConfirmPin, setResetConfirmPin] = useState('');
-
-  const hasDemoUsers = users.some((u) => u.isDemo);
 
   const handleCredentialsSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,7 +83,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     );
 
     if (!found) {
-      setErrorMessage('Akun pengguna tidak ditemukan! Silakan periksa kembali atau buat Akun Baru.');
+      setErrorMessage('Akun pengguna tidak ditemukan! Silakan masuk dengan Akun Google atau buat Akun Baru.');
       return;
     }
 
@@ -152,7 +147,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       isDemo: false,
     };
 
-    onRegisterUser(newUserData, regClearDemo);
+    onRegisterUser(newUserData);
   };
 
   const handleResetPinSubmit = (e: React.FormEvent) => {
@@ -189,7 +184,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
           }`}
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Kembali ke Profil & Katalog Toko</span>
+          <span>Kembali ke Profil &amp; Katalog Toko</span>
         </button>
 
         {/* Main Card */}
@@ -209,7 +204,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               {storeProfile.name}
             </h1>
             <p className={`text-xs mt-1 font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-              Aplikasi Kasir POS & Keamanan Akun Real
+              Sistem Kasir POS &amp; Sinkronisasi Multi-Perangkat
             </p>
           </div>
 
@@ -247,11 +242,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             </button>
           </div>
 
-          {/* Notice Banner */}
-          <div className="mb-4 p-2.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] font-medium flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+          {/* Multi-Device Cloud Sync Notice Banner */}
+          <div className="mb-4 p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] font-medium flex items-start gap-2.5">
+            <Cloud className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
             <span>
-              <strong>Bisa Dipakai Tanpa Hosting:</strong> Masuk langsung dengan PIN/Password lokal di bawah tanpa butuh server internet.
+              <strong>Sinkron Semua Perangkat (HP, Tablet &amp; Laptop):</strong> Masuk dengan <strong>Akun Google</strong> agar data barang, stok, dan transaksi otomatis sama &amp; real-time di semua perangkat.
             </span>
           </div>
 
@@ -270,7 +265,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               {errorMessage.includes('unauthorized-domain') && (
                 <div className="p-3 bg-slate-950/80 rounded-xl border border-rose-500/30 text-[11px] text-slate-300 space-y-2">
                   <p>
-                    <strong>Solusi:</strong> Daftarkan domain Vercel Anda di Firebase Console:
+                    <strong>Solusi:</strong> Daftarkan domain hosting Anda di Firebase Console:
                   </p>
                   <a
                     href="https://console.firebase.google.com/project/gen-lang-client-0566158393/authentication/settings"
@@ -278,11 +273,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                     rel="noreferrer"
                     className="inline-block text-amber-400 hover:underline font-bold"
                   >
-                    Buka Firebase Console Settings →
+                    Buka Firebase Console Settings &rarr;
                   </a>
-                  <p className="text-emerald-400 font-bold">
-                    Atau masuk langsung dengan PIN di bawah (Email: salsabilamart684@gmail.com, PIN: 123456).
-                  </p>
                 </div>
               )}
             </div>
@@ -291,17 +283,17 @@ export const LoginPage: React.FC<LoginPageProps> = ({
           {/* MODE 1: LOGIN */}
           {activeMode === 'login' && (
             <>
-              {/* Google Sign In Option */}
+              {/* Google Sign In Option (Primary Multi-Device Sync) */}
               <button
                 onClick={onGoogleLogin}
                 disabled={isLoggingInGoogle}
-                className={`w-full flex items-center justify-center gap-3 py-3 px-4 rounded-2xl text-xs font-bold border shadow-xs transition-all mb-4 cursor-pointer active:scale-98 ${
+                className={`w-full flex items-center justify-center gap-3 py-3.5 px-4 rounded-2xl text-xs font-black border-2 shadow-sm transition-all mb-4 cursor-pointer active:scale-98 ${
                   isDark
-                    ? 'bg-slate-850 hover:bg-slate-800 border-slate-700 text-white'
-                    : 'bg-white hover:bg-slate-50 border-slate-300 text-slate-700'
+                    ? 'bg-emerald-950/40 hover:bg-emerald-900/50 border-emerald-500/50 text-white'
+                    : 'bg-emerald-50/70 hover:bg-emerald-100/70 border-emerald-500/60 text-slate-900'
                 }`}
               >
-                <svg className="w-4 h-4" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
                   <path
                     fill="#4285F4"
                     d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.65v3h3.88c2.27-2.09 3.665-5.17 3.665-9.09z"
@@ -320,7 +312,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                   />
                 </svg>
                 <span>
-                  {isLoggingInGoogle ? 'Menghubungkan Akun Google...' : 'Masuk dengan Akun Google'}
+                  {isLoggingInGoogle
+                    ? 'Menghubungkan & Menyinkronkan Cloud...'
+                    : 'Masuk dengan Akun Google (Sinkron Lintas Perangkat)'}
                 </span>
               </button>
 
@@ -331,7 +325,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                     isDark ? 'text-slate-500' : 'text-slate-400'
                   }`}
                 >
-                  atau masuk dengan PIN / Akun
+                  atau masuk offline dengan PIN
                 </span>
                 <div className={`flex-grow border-t ${isDark ? 'border-slate-800' : 'border-slate-200'}`} />
               </div>
@@ -347,17 +341,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                     >
                       Pilih Akun Terdaftar:
                     </label>
-                    {hasDemoUsers && (
-                      <button
-                        type="button"
-                        onClick={onClearDemoUsers}
-                        className="text-[10px] text-amber-500 hover:text-amber-400 font-bold flex items-center gap-1 cursor-pointer"
-                        title="Hapus semua akun demo dan mulai akun real"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                        <span>Bersihkan Akun Demo</span>
-                      </button>
-                    )}
                   </div>
                   <div className="grid grid-cols-2 gap-2 max-h-36 overflow-y-auto pr-1">
                     {users.map((u) => {
@@ -394,11 +377,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                               >
                                 {u.role}
                               </span>
-                              {u.isDemo && (
-                                <span className="text-[8px] bg-slate-700/60 text-slate-300 px-1 rounded-sm">
-                                  Demo
-                                </span>
-                              )}
                             </div>
                           </div>
                         </button>
@@ -497,10 +475,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-400">
                 <p className="font-bold flex items-center gap-1.5 mb-1">
                   <Sparkles className="w-4 h-4" />
-                  Buat Akun Real Toko Anda
+                  Buat Akun Toko Anda
                 </p>
                 <p className="text-[11px] text-slate-300">
-                  Daftarkan identitas pemilik atau kasir dengan PIN/Password asli Anda sendiri.
+                  Daftarkan identitas pemilik atau kasir dengan PIN/Password Anda sendiri.
                 </p>
               </div>
 
@@ -509,6 +487,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 <input
                   type="text"
                   required
+                  maxLength={120}
                   value={regName}
                   onChange={(e) => setRegName(e.target.value)}
                   placeholder="Contoh: Salsabila"
@@ -520,13 +499,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-xs font-bold block mb-1 text-slate-300">Email / User *</label>
+                  <label className="text-xs font-bold block mb-1 text-slate-300">Email Google *</label>
                   <input
                     type="text"
                     required
+                    maxLength={128}
                     value={regEmail}
                     onChange={(e) => setRegEmail(e.target.value)}
-                    placeholder="email@toko.com"
+                    placeholder="nama@gmail.com"
                     className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-hidden focus:ring-2 focus:ring-emerald-500 ${
                       isDark ? 'bg-slate-850 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
                     }`}
@@ -536,6 +516,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                   <label className="text-xs font-bold block mb-1 text-slate-300">No. WhatsApp</label>
                   <input
                     type="tel"
+                    maxLength={40}
                     value={regPhone}
                     onChange={(e) => setRegPhone(e.target.value)}
                     placeholder="0812xxxx"
@@ -556,7 +537,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                   }`}
                 >
                   <option value="admin">Admin / Pemilik Toko (Akses Penuh)</option>
-                  <option value="kasir">Kasir (Transaksi & Stok)</option>
+                  <option value="kasir">Kasir (Transaksi &amp; Stok)</option>
                 </select>
               </div>
 
@@ -566,6 +547,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                   <input
                     type={showPin ? 'text' : 'password'}
                     required
+                    maxLength={64}
                     value={regPin}
                     onChange={(e) => setRegPin(e.target.value)}
                     placeholder="Min. 4 karakter"
@@ -579,6 +561,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                   <input
                     type={showPin ? 'text' : 'password'}
                     required
+                    maxLength={64}
                     value={regConfirmPin}
                     onChange={(e) => setRegConfirmPin(e.target.value)}
                     placeholder="Ulangi sandi"
@@ -598,24 +581,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                   {showPin ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                   <span>{showPin ? 'Sembunyikan' : 'Tampilkan'}</span>
                 </button>
-                {hasDemoUsers && (
-                  <label className="flex items-center gap-1.5 cursor-pointer text-slate-400 hover:text-white">
-                    <input
-                      type="checkbox"
-                      checked={regClearDemo}
-                      onChange={(e) => setRegClearDemo(e.target.checked)}
-                      className="rounded text-emerald-600 focus:ring-emerald-500"
-                    />
-                    <span className="text-[11px]">Hapus akun demo</span>
-                  </label>
-                )}
               </div>
 
               <button
                 type="submit"
                 className="w-full py-3 px-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-98 text-white rounded-2xl font-black text-xs uppercase tracking-wider shadow-lg shadow-emerald-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer mt-3"
               >
-                <span>Daftar & Masuk Sekarang</span>
+                <span>Daftar &amp; Masuk Sekarang</span>
                 <ChevronRight className="w-4 h-4" />
               </button>
             </form>
@@ -656,6 +628,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 <input
                   type={showPin ? 'text' : 'password'}
                   required
+                  maxLength={64}
                   value={resetNewPin}
                   onChange={(e) => setResetNewPin(e.target.value)}
                   placeholder="Minimal 4 karakter / digit"
@@ -670,6 +643,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 <input
                   type={showPin ? 'text' : 'password'}
                   required
+                  maxLength={64}
                   value={resetConfirmPin}
                   onChange={(e) => setResetConfirmPin(e.target.value)}
                   placeholder="Ulangi PIN baru"
@@ -701,7 +675,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 type="submit"
                 className="w-full py-3 px-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-98 text-white rounded-2xl font-black text-xs uppercase tracking-wider shadow-lg shadow-emerald-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer mt-3"
               >
-                <span>Simpan PIN & Lanjut Login</span>
+                <span>Simpan PIN &amp; Lanjut Login</span>
                 <ChevronRight className="w-4 h-4" />
               </button>
             </form>

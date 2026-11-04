@@ -15,7 +15,6 @@ import {
   Cloud,
   UploadCloud,
   DownloadCloud,
-  Trash2,
   X,
 } from 'lucide-react';
 import { GoogleSheetsConfig, Product, StoreProfile, Transaction } from '../types';
@@ -39,7 +38,6 @@ interface GoogleSheetsSyncProps {
   onUpdateConfig: (cfg: GoogleSheetsConfig) => void;
   onImportProducts: (imported: Product[]) => void;
   onImportTransactions?: (imported: Transaction[]) => void;
-  onZeroAllTransactions?: (alsoClearSheet: boolean) => Promise<void>;
   pendingSyncCount?: number;
   onSyncPending?: () => void;
   isSyncingPending?: boolean;
@@ -51,8 +49,7 @@ type ConfirmActionType =
   | 'push-full'
   | 'pull-full'
   | 'push-products'
-  | 'pull-products'
-  | 'zero-transactions';
+  | 'pull-products';
 
 export const GoogleSheetsSync: React.FC<GoogleSheetsSyncProps> = ({
   products,
@@ -62,7 +59,6 @@ export const GoogleSheetsSync: React.FC<GoogleSheetsSyncProps> = ({
   onUpdateConfig,
   onImportProducts,
   onImportTransactions,
-  onZeroAllTransactions,
   pendingSyncCount = 0,
   onSyncPending,
   isSyncingPending = false,
@@ -174,9 +170,7 @@ export const GoogleSheetsSync: React.FC<GoogleSheetsSyncProps> = ({
         spreadsheetName: config.spreadsheetName || 'Google Sheets (via Apps Script Webhook)',
         lastSyncedAt: new Date().toISOString(),
       });
-      setNotice(
-        'Webhook Google Apps Script berhasil terhubung tanpa menambah baris transaksi uji coba palsu!'
-      );
+      setNotice('Webhook Google Apps Script berhasil terhubung dan siap digunakan!');
     } catch {
       onUpdateConfig({
         ...config,
@@ -197,29 +191,9 @@ export const GoogleSheetsSync: React.FC<GoogleSheetsSyncProps> = ({
     setConfirmAction(null);
     if (!action) return;
 
-    if (action === 'zero-transactions' && onZeroAllTransactions) {
-      setIsSyncing(true);
-      setNotice('Mengosongkan (0-kan) transaksi di aplikasi & Google Sheets...');
-      try {
-        await onZeroAllTransactions(Boolean(config.spreadsheetId || config.webhookUrl));
-        setNotice(
-          'Berhasil! Seluruh transaksi telah di-0-kan di Dashboard aplikasi dan Google Sheets.'
-        );
-      } catch (err: any) {
-        setNotice(`Gagal meng-0-kan transaksi: ${err.message}`, true);
-      } finally {
-        setIsSyncing(false);
-      }
-      return;
-    }
-
     if (action === 'push-full') {
       setIsSyncing(true);
-      setNotice(
-        transactions.length === 0
-          ? 'Mengosongkan lembar Transaksi & memperbarui Dashboard menjadi Rp 0 di Google Sheets...'
-          : 'Menyinkronkan penuh Dashboard, Transaksi & Produk ke Google Sheets...'
-      );
+      setNotice('Menyinkronkan penuh Dashboard, Transaksi & Produk ke Google Sheets...');
       try {
         const res = await overwriteFullStateToSheet(
           config.spreadsheetId,
@@ -379,7 +353,7 @@ export const GoogleSheetsSync: React.FC<GoogleSheetsSyncProps> = ({
                 Integrasi Database Google Sheets (2 Arah)
               </h1>
               <p className="text-xs text-slate-400 mt-0.5">
-                Sinkronisasi penuh Dashboard, Transaksi (termasuk kondisi 0 / kosong), dan Inventaris Produk.
+                Sinkronisasi penuh Dashboard, Transaksi penjualan, dan Inventaris Produk toko Anda.
               </p>
             </div>
           </div>
@@ -625,7 +599,7 @@ export const GoogleSheetsSync: React.FC<GoogleSheetsSyncProps> = ({
                   {pendingSyncCount > 0
                     ? `Terdapat ${pendingSyncCount} transaksi baru yang belum masuk ke Google Sheets.`
                     : transactions.length === 0
-                    ? 'Data transaksi di aplikasi saat ini 0 (kosong). Gunakan tombol "Kirim & Samakan ke Google Sheets" di bawah jika ingin mengosongkan Spreadsheet juga.'
+                    ? 'Belum ada transaksi tercatat. Setiap transaksi baru di kasir akan otomatis masuk ke Google Sheets.'
                     : 'Seluruh transaksi baru telah masuk ke Google Sheets.'}
                 </p>
               </div>
@@ -664,8 +638,7 @@ export const GoogleSheetsSync: React.FC<GoogleSheetsSyncProps> = ({
                 <p className="text-[11px] text-slate-400 leading-relaxed">
                   Menyamakan lembar <strong>Dashboard</strong>, <strong>Transaksi</strong> (
                   {transactions.length} struk), <strong>Detail_Transaksi</strong>, dan{' '}
-                  <strong>Produk</strong> di Google Sheets dengan aplikasi ini. Jika transaksi sudah
-                  Anda <strong>0-kan</strong>, baris lama di Sheets ikut dibersihkan menjadi Rp 0!
+                  <strong>Produk</strong> ({products.length} barang) di Google Sheets dengan aplikasi ini.
                 </p>
                 <button
                   onClick={() => setConfirmAction('push-full')}
@@ -673,11 +646,7 @@ export const GoogleSheetsSync: React.FC<GoogleSheetsSyncProps> = ({
                   className="w-full py-2.5 px-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs"
                 >
                   <UploadCloud className="w-4 h-4" />
-                  <span>
-                    {transactions.length === 0
-                      ? 'Kosongkan & Sinkron Rp 0 ke Sheets'
-                      : 'Sinkronkan Penuh ke Sheets'}
-                  </span>
+                  <span>Sinkronkan Penuh ke Sheets</span>
                 </button>
               </div>
 
@@ -694,8 +663,7 @@ export const GoogleSheetsSync: React.FC<GoogleSheetsSyncProps> = ({
                 </div>
                 <p className="text-[11px] text-slate-400 leading-relaxed">
                   Menarik isi lembar <strong>Transaksi</strong> &amp; <strong>Produk</strong> dari
-                  Google Sheets ke aplikasi. Jika Anda sudah menghapus baris transaksi di
-                  Spreadsheet hingga <strong>0</strong>, Dashboard aplikasi akan ikut menjadi Rp 0!
+                  Google Sheets ke aplikasi sehingga Dashboard &amp; stok produk mengikuti isi Spreadsheet.
                 </p>
                 <button
                   onClick={() => setConfirmAction('pull-full')}
@@ -708,8 +676,8 @@ export const GoogleSheetsSync: React.FC<GoogleSheetsSyncProps> = ({
               </div>
             </div>
 
-            {/* Product-Only Sync & Zero Out Row */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-slate-100 dark:border-slate-800">
+            {/* Product-Only Sync Row */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-100 dark:border-slate-800">
               <div
                 className={`p-4 rounded-2xl border space-y-2 ${
                   isDark ? 'bg-slate-850 border-slate-750' : 'bg-slate-50 border-slate-200'
@@ -719,7 +687,7 @@ export const GoogleSheetsSync: React.FC<GoogleSheetsSyncProps> = ({
                   Unggah Produk Saja
                 </h4>
                 <p className="text-[11px] text-slate-400">
-                  Kirim {products.length} barang &amp; stok tanpa mengubah transaksi lama.
+                  Kirim {products.length} barang &amp; stok ke lembar Produk tanpa mengubah transaksi.
                 </p>
                 <button
                   onClick={() => setConfirmAction('push-products')}
@@ -751,27 +719,6 @@ export const GoogleSheetsSync: React.FC<GoogleSheetsSyncProps> = ({
                   <span>Unduh Produk</span>
                 </button>
               </div>
-
-              <div
-                className={`p-4 rounded-2xl border space-y-2 ${
-                  isDark
-                    ? 'bg-rose-950/20 border-rose-500/30'
-                    : 'bg-rose-50/60 border-rose-200'
-                }`}
-              >
-                <h4 className="text-xs font-bold text-rose-500">Nol-kan (0) Transaksi</h4>
-                <p className="text-[11px] text-slate-400">
-                  Kosongkan transaksi di aplikasi &amp; Google Sheets menjadi Rp 0.
-                </p>
-                <button
-                  onClick={() => setConfirmAction('zero-transactions')}
-                  disabled={isSyncing}
-                  className="mt-1 w-full py-2 px-3 bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>0-kan Semua Transaksi</span>
-                </button>
-              </div>
             </div>
           </div>
         </div>
@@ -795,7 +742,7 @@ export const GoogleSheetsSync: React.FC<GoogleSheetsSyncProps> = ({
               <p className="text-xs text-slate-400 mt-1 leading-relaxed">
                 Metode ini <strong>100% bebas dari batasan Authorized Domain Firebase</strong>.
                 Pastikan Anda memakai kode terbaru dari tab <strong>Apps Script (.gs)</strong> agar
-                mendukung sinkronisasi Dashboard &amp; pengosongan (0) transaksi.
+                mendukung sinkronisasi penuh dua arah.
               </p>
             </div>
           </div>
@@ -881,14 +828,14 @@ export const GoogleSheetsSync: React.FC<GoogleSheetsSyncProps> = ({
                     Spreadsheet:
                   </span>
                 </p>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <button
                     onClick={() => setConfirmAction('push-full')}
                     disabled={isSyncing}
                     className="py-2.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1.5 cursor-pointer"
                   >
                     <UploadCloud className="w-4 h-4" />
-                    <span>Kirim / 0-kan ke Sheets</span>
+                    <span>Kirim &amp; Samakan ke Sheets</span>
                   </button>
                   <button
                     onClick={() => setConfirmAction('pull-full')}
@@ -897,14 +844,6 @@ export const GoogleSheetsSync: React.FC<GoogleSheetsSyncProps> = ({
                   >
                     <DownloadCloud className="w-4 h-4" />
                     <span>Tarik dari Sheets</span>
-                  </button>
-                  <button
-                    onClick={() => setConfirmAction('zero-transactions')}
-                    disabled={isSyncing}
-                    className="py-2.5 px-3 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1.5 cursor-pointer"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    <span>0-kan Aplikasi &amp; Sheets</span>
                   </button>
                 </div>
               </div>
@@ -956,7 +895,7 @@ export const GoogleSheetsSync: React.FC<GoogleSheetsSyncProps> = ({
         </div>
       )}
 
-      {/* Explicit Workspace Confirmation Modal (No window.confirm / window.alert) */}
+      {/* Explicit Workspace Confirmation Modal */}
       {confirmAction && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-xs animate-in fade-in">
           <div
@@ -967,13 +906,7 @@ export const GoogleSheetsSync: React.FC<GoogleSheetsSyncProps> = ({
             }`}
           >
             <div className="flex items-start gap-3">
-              <div
-                className={`p-2.5 rounded-2xl shrink-0 ${
-                  confirmAction === 'zero-transactions'
-                    ? 'bg-rose-500/15 text-rose-500'
-                    : 'bg-emerald-500/15 text-emerald-500'
-                }`}
-              >
+              <div className="p-2.5 rounded-2xl shrink-0 bg-emerald-500/15 text-emerald-500">
                 <AlertTriangle className="w-5 h-5" />
               </div>
               <div className="space-y-1 text-xs">
@@ -982,20 +915,16 @@ export const GoogleSheetsSync: React.FC<GoogleSheetsSyncProps> = ({
                   {confirmAction === 'pull-full' && 'Konfirmasi Tarik Data dari Google Sheets'}
                   {confirmAction === 'push-products' && 'Konfirmasi Unggah Produk ke Google Sheets'}
                   {confirmAction === 'pull-products' && 'Konfirmasi Unduh Produk dari Google Sheets'}
-                  {confirmAction === 'zero-transactions' &&
-                    'Konfirmasi Nol-kan (0) Seluruh Transaksi'}
                 </h4>
                 <p className="text-slate-400 leading-relaxed">
                   {confirmAction === 'push-full' &&
                     `Lembar Dashboard, Transaksi, Detail_Transaksi, dan Produk pada "${sheetTargetName}" akan diperbarui mengikuti aplikasi ini (${transactions.length} transaksi & ${products.length} produk).`}
                   {confirmAction === 'pull-full' &&
-                    `Data transaksi dan produk di Dashboard aplikasi akan digantikan mengikuti isi "${sheetTargetName}". Jika lembar Transaksi di Sheets kosong (0 baris), Dashboard akan menjadi Rp 0.`}
+                    `Data transaksi dan produk di Dashboard aplikasi akan disamakan mengikuti isi "${sheetTargetName}".`}
                   {confirmAction === 'push-products' &&
                     `Memperbarui lembar Produk di "${sheetTargetName}" dengan ${products.length} data produk toko saat ini.`}
                   {confirmAction === 'pull-products' &&
-                    `Menimpa daftar produk lokal dengan daftar produk dari lembar Produk di "${sheetTargetName}".`}
-                  {confirmAction === 'zero-transactions' &&
-                    `Seluruh riwayat struk penjualan (${transactions.length} transaksi) di aplikasi dan lembar Transaksi di "${sheetTargetName}" akan dikosongkan menjadi 0 (Rp 0). Produk tidak dihapus.`}
+                    `Menyamakan daftar produk aplikasi dengan daftar produk dari lembar Produk di "${sheetTargetName}".`}
                 </p>
               </div>
             </div>
@@ -1008,11 +937,7 @@ export const GoogleSheetsSync: React.FC<GoogleSheetsSyncProps> = ({
               </button>
               <button
                 onClick={executeConfirmedAction}
-                className={`px-4 py-2 rounded-xl text-xs font-black text-white cursor-pointer shadow-md ${
-                  confirmAction === 'zero-transactions'
-                    ? 'bg-rose-600 hover:bg-rose-500'
-                    : 'bg-emerald-600 hover:bg-emerald-500'
-                }`}
+                className="px-4 py-2 rounded-xl text-xs font-black text-white cursor-pointer shadow-md bg-emerald-600 hover:bg-emerald-500"
               >
                 Ya, Lanjutkan
               </button>

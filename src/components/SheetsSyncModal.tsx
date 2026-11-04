@@ -4,7 +4,6 @@ import {
   FileSpreadsheet,
   UploadCloud,
   DownloadCloud,
-  Trash2,
   AlertTriangle,
   RefreshCw,
   CheckCircle2,
@@ -14,7 +13,7 @@ import {
 import { GoogleSheetsConfig } from '../types';
 import { formatRupiah } from '../services/storage';
 
-export type SyncModalInitialMode = 'hub' | 'confirm-push' | 'confirm-pull' | 'confirm-zero';
+export type SyncModalInitialMode = 'hub' | 'confirm-push' | 'confirm-pull';
 
 interface SheetsSyncModalProps {
   isOpen: boolean;
@@ -27,7 +26,6 @@ interface SheetsSyncModalProps {
   isBusy: boolean;
   onPushFullToSheet: () => Promise<void>;
   onPullFullFromSheet: () => Promise<void>;
-  onZeroTransactions: (alsoClearSheet: boolean) => Promise<void>;
   onOpenSheetsMenu: () => void;
   isDark?: boolean;
 }
@@ -43,21 +41,16 @@ export const SheetsSyncModal: React.FC<SheetsSyncModalProps> = ({
   isBusy,
   onPushFullToSheet,
   onPullFullFromSheet,
-  onZeroTransactions,
   onOpenSheetsMenu,
   isDark = false,
 }) => {
   const [mode, setMode] = useState<SyncModalInitialMode>(initialMode);
-  const [alsoClearSheet, setAlsoClearSheet] = useState<boolean>(
-    Boolean(config.spreadsheetId || config.webhookUrl)
-  );
 
   React.useEffect(() => {
     if (isOpen) {
       setMode(initialMode);
-      setAlsoClearSheet(Boolean(config.spreadsheetId || config.webhookUrl));
     }
-  }, [isOpen, initialMode, config.spreadsheetId, config.webhookUrl]);
+  }, [isOpen, initialMode]);
 
   if (!isOpen) return null;
 
@@ -88,7 +81,7 @@ export const SheetsSyncModal: React.FC<SheetsSyncModalProps> = ({
                 Pusat Sinkronisasi Dashboard &amp; Google Sheets
               </h3>
               <p className="text-[11px] text-slate-400">
-                Samakan data transaksi (termasuk kondisi 0 / kosong) dua arah
+                Sinkronisasi data penjualan &amp; inventaris produk dua arah
               </p>
             </div>
           </div>
@@ -141,7 +134,7 @@ export const SheetsSyncModal: React.FC<SheetsSyncModalProps> = ({
             )}
           </div>
 
-          {!isConnected && mode !== 'confirm-zero' && (
+          {!isConnected && (
             <div className="p-4 rounded-2xl border border-amber-500/40 bg-amber-500/10 space-y-3">
               <div className="flex items-start gap-2.5">
                 <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
@@ -193,9 +186,7 @@ export const SheetsSyncModal: React.FC<SheetsSyncModalProps> = ({
                     1. Kirim &amp; Samakan Aplikasi &rarr; Google Sheets
                   </h4>
                   <p className="text-[11px] text-slate-400 leading-relaxed">
-                    {localTransactionCount === 0
-                      ? 'Data transaksi Anda saat ini 0. Pilihan ini akan mengosongkan baris transaksi lama di Google Sheets & memperbarui lembar Dashboard menjadi Rp 0.'
-                      : `Perbarui lembar Dashboard, Transaksi (${localTransactionCount} struk), Detail_Transaksi, dan Produk di Google Sheets mengikuti aplikasi ini.`}
+                    Perbarui lembar Dashboard, Transaksi ({localTransactionCount} struk), Detail_Transaksi, dan Produk ({productCount} barang) di Google Sheets mengikuti data aplikasi saat ini.
                   </p>
                 </div>
               </button>
@@ -218,30 +209,7 @@ export const SheetsSyncModal: React.FC<SheetsSyncModalProps> = ({
                     2. Tarik Data Google Sheets &rarr; Dashboard Aplikasi
                   </h4>
                   <p className="text-[11px] text-slate-400 leading-relaxed">
-                    Jika Anda sudah menghapus / meng-0-kan baris transaksi langsung di Google Sheets, klik ini agar Dashboard aplikasi ikut menjadi Rp 0 sesuai isi Spreadsheet.
-                  </p>
-                </div>
-              </button>
-
-              {/* Option 3: Zero Out Both */}
-              <button
-                disabled={isBusy}
-                onClick={() => setMode('confirm-zero')}
-                className={`w-full text-left p-4 rounded-2xl border transition-all flex items-start gap-3.5 cursor-pointer disabled:opacity-50 ${
-                  isDark
-                    ? 'bg-rose-950/20 border-rose-500/30 hover:border-rose-500/60 hover:bg-rose-950/30'
-                    : 'bg-rose-50/60 border-rose-200 hover:border-rose-400'
-                }`}
-              >
-                <div className="p-2.5 rounded-xl bg-rose-500/15 text-rose-500 shrink-0">
-                  <Trash2 className="w-5 h-5" />
-                </div>
-                <div className="space-y-1">
-                  <h4 className="font-black text-xs sm:text-sm text-rose-500">
-                    3. Nol-kan (0) Semua Data Transaksi (Aplikasi + Sheets)
-                  </h4>
-                  <p className="text-[11px] text-slate-400 leading-relaxed">
-                    Reset omset &amp; seluruh riwayat transaksi menjadi 0 (Rp 0) tanpa menghapus daftar barang/stok produk toko.
+                    Ambil data Transaksi &amp; Produk dari Google Sheets agar Dashboard aplikasi serta seluruh perangkat terhubung mengikuti isi Spreadsheet.
                   </p>
                 </div>
               </button>
@@ -256,15 +224,13 @@ export const SheetsSyncModal: React.FC<SheetsSyncModalProps> = ({
                   Konfirmasi Pembaruan Google Sheets
                 </p>
                 <p className={isDark ? 'text-slate-200 leading-relaxed' : 'text-slate-700 leading-relaxed'}>
-                  Anda akan menimpa data pada Spreadsheet{' '}
+                  Anda akan memperbarui data pada Spreadsheet{' '}
                   <strong>"{targetSheetLabel}"</strong> pada lembar:
                 </p>
                 <ul className="list-disc list-inside space-y-1 text-[11px] text-slate-400">
                   <li>
                     <strong>Transaksi &amp; Detail_Transaksi:</strong>{' '}
-                    {localTransactionCount === 0
-                      ? 'Seluruh baris lama akan DIKOSONGKAN (0 transaksi)'
-                      : `Diisi dengan ${localTransactionCount} transaksi aktif saat ini`}
+                    Disamakan dengan {localTransactionCount} transaksi saat ini
                   </li>
                   <li>
                     <strong>Dashboard:</strong> Diperbarui ke Omset Hari Ini{' '}
@@ -311,9 +277,9 @@ export const SheetsSyncModal: React.FC<SheetsSyncModalProps> = ({
                   Konfirmasi Tarik Data dari Google Sheets
                 </p>
                 <p className={isDark ? 'text-slate-200 leading-relaxed' : 'text-slate-700 leading-relaxed'}>
-                  Data transaksi dan produk di Dashboard aplikasi akan digantikan mengikuti isi lembar{' '}
+                  Data transaksi dan produk di Dashboard aplikasi akan disamakan mengikuti isi lembar{' '}
                   <strong>Transaksi</strong> &amp; <strong>Produk</strong> pada Spreadsheet{' '}
-                  <strong>"{targetSheetLabel}"</strong>. Jika lembar Transaksi di Google Sheets kosong (0 baris), maka Dashboard aplikasi juga akan menjadi <strong>0 (Rp 0)</strong>.
+                  <strong>"{targetSheetLabel}"</strong>.
                 </p>
               </div>
 
@@ -339,66 +305,6 @@ export const SheetsSyncModal: React.FC<SheetsSyncModalProps> = ({
                     <DownloadCloud className="w-4 h-4" />
                   )}
                   <span>{isBusy ? 'Menarik Data...' : 'Ya, Tarik & Samakan Dashboard'}</span>
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* CONFIRM ZERO */}
-          {mode === 'confirm-zero' && (
-            <div className="space-y-4">
-              <div className="p-4 rounded-2xl border border-rose-500/40 bg-rose-500/10 space-y-2.5 text-xs">
-                <div className="flex items-center gap-2 text-rose-500 font-black uppercase tracking-wide">
-                  <AlertTriangle className="w-4 h-4" />
-                  <span>Konfirmasi Nol-kan (0) Seluruh Transaksi</span>
-                </div>
-                <p className={isDark ? 'text-slate-200 leading-relaxed' : 'text-slate-700 leading-relaxed'}>
-                  Seluruh riwayat struk penjualan (<strong>{localTransactionCount} transaksi</strong>) akan dihapus menjadi <strong>0 (Rp 0)</strong>. Daftar barang dan stok inventaris toko Anda <strong>TIDAK</strong> akan terhapus.
-                </p>
-
-                {isConnected && (
-                  <label className="flex items-start gap-2.5 pt-2 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={alsoClearSheet}
-                      onChange={(e) => setAlsoClearSheet(e.target.checked)}
-                      className="mt-0.5 rounded border-slate-600 text-emerald-500 focus:ring-emerald-500"
-                    />
-                    <span className={isDark ? 'text-slate-200 font-semibold' : 'text-slate-800 font-semibold'}>
-                      Sekaligus kosongkan (0-kan) lembar <code>Transaksi</code> &amp; <code>Detail_Transaksi</code> serta perbarui lembar <code>Dashboard</code> menjadi Rp 0 di Google Sheets (<strong>{targetSheetLabel}</strong>)
-                    </span>
-                  </label>
-                )}
-              </div>
-
-              <div className="flex items-center justify-end gap-2.5 pt-1">
-                <button
-                  onClick={() => (initialMode === 'confirm-zero' ? onClose() : setMode('hub'))}
-                  disabled={isBusy}
-                  className="px-4 py-2.5 rounded-xl text-xs font-bold border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
-                >
-                  Batal
-                </button>
-                <button
-                  onClick={async () => {
-                    await onZeroTransactions(alsoClearSheet && isConnected);
-                    onClose();
-                  }}
-                  disabled={isBusy}
-                  className="px-5 py-2.5 rounded-xl text-xs font-black bg-rose-600 hover:bg-rose-500 text-white flex items-center gap-2 cursor-pointer shadow-md"
-                >
-                  {isBusy ? (
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Trash2 className="w-4 h-4" />
-                  )}
-                  <span>
-                    {isBusy
-                      ? 'Memproses...'
-                      : alsoClearSheet && isConnected
-                      ? '0-kan Aplikasi & Google Sheets'
-                      : '0-kan Transaksi Aplikasi'}
-                  </span>
                 </button>
               </div>
             </div>
